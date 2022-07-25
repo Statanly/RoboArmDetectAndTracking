@@ -40,10 +40,16 @@ from strong_sort.strong_sort import StrongSORT
 # remove duplicated stream handler to avoid duplicated logging
 logging.getLogger().removeHandler(logging.getLogger().handlers[0])
 
+def check_path(source):
+    is_file = Path(source).suffix[1:] in (VID_FORMATS)
+    is_url = source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
+    webcam = source.isnumeric() or source.endswith('.txt') or (is_url and not is_file)
+    return is_file, is_url, webcam
 
 @torch.no_grad()
 def run(
-        source='0',
+        source_front='0',
+        source_side='0',
         yolo_weights=WEIGHTS / 'yolov5m.pt',  # model.pt path(s),
         strong_sort_weights=WEIGHTS / 'osnet_x0_25_msmt17.pt',  # model.pt path,
         config_strongsort=ROOT / 'strong_sort/configs/strong_sort.yaml',
@@ -69,12 +75,12 @@ def run(
         hide_class=False,  # hide IDs
         half=False,  # use FP16 half-precision inference
 ):
-    source = str(source)
-    is_file = Path(source).suffix[1:] in (VID_FORMATS)
-    is_url = source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
-    webcam = source.isnumeric() or source.endswith('.txt') or (is_url and not is_file)
-    if is_url and is_file:
-        source = check_file(source)  # download
+    source_front = str(source_front)
+    source_side = str(source_side)
+
+    is_url_f, is_file_f, webcam_f = check_path(source_front)
+
+    is_url_s, is_file_s, webcam_s = check_path(source_side)
 
     # Directories
     if not isinstance(yolo_weights, list):  # single yolo model
@@ -94,15 +100,15 @@ def run(
     imgsz = check_img_size(imgsz, s=stride)  # check image size
 
     # Dataloader
-    if webcam:
+    if webcam_f:
         show_vid = check_imshow()
         cudnn.benchmark = True  # set True to speed up constant image size inference
-        dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt)
+        dataset = LoadStreams(source_front, img_size=imgsz, stride=stride, auto=pt)
         nr_sources = len(dataset)
     else:
-        dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt)
+        dataset = LoadImages(source_front, source_side, img_size=imgsz, stride=stride, auto=pt)
         nr_sources = 1
-
+    LOGGER.info(f'Dataset {dataset}')
     vid_path, vid_writer, txt_path = [None] * nr_sources, [None] * nr_sources, [None] * nr_sources
 
     # initialize StrongSORT
@@ -132,7 +138,7 @@ def run(
     model.warmup(imgsz=(1 if pt else nr_sources, 3, *imgsz))  # warmup
     dt, seen = [0.0, 0.0, 0.0, 0.0], 0
     curr_frames, prev_frames = [None] * nr_sources, [None] * nr_sources
-    for frame_idx, (path, im, im0s, vid_cap, s) in enumerate(dataset):
+    for frame_idx, (path, im, im0s, vid_cap_f, vid_cap_s , s) in enumerate(dataset):
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
         im = im.half() if half else im.float()  # uint8 to fp16/32
@@ -160,7 +166,7 @@ def run(
         sockets = []
         for i, det in enumerate(pred):  # detections per image
             seen += 1
-            if webcam:  # nr_sources >= 1
+            if webcam_f:  # nr_sources >= 1
                 p, im0, _ = path[i], im0s[i].copy(), dataset.count
                 p = Path(p)  # to Path
                 s += f'{i}: '
@@ -168,9 +174,10 @@ def run(
                 save_path = str(save_dir / p.name)  # im.jpg, vid.mp4, ...
             else:
                 p, im0, _ = path, im0s.copy(), getattr(dataset, 'frame', 0)
-                p = Path(p)  # to Path
+                p = Path(p[0])
+                # to Path
                 # video file
-                if source.endswith(VID_FORMATS):
+                if source_front.endswith(VID_FORMATS):
                     txt_file_name = p.stem
                     save_path = str(save_dir / p.name)  # im.jpg, vid.mp4, ...
                 # folder with imgs
@@ -236,7 +243,6 @@ def run(
             if len(sockets) > 1:
                 left_socket, right_socket = (sockets[0], sockets[1]) if sockets[0][0] < sockets[1][0] else (sockets[1], sockets[0])
             elif len(sockets)==1:
-                print(ends[0], im0.shape)
                 left_socket = sockets[0] if sockets[0][0] < im0.shape[1]//2 else None
                 right_socket = sockets[0] if sockets[0][0] > im0.shape[1] // 2 else None
 
@@ -316,15 +322,19 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--source-front', type=str, default='0', help='file/dir/URL/glob')
+    parser.add_argument('--source-side', type=str, default='0', help='file/dir/URL/glob')
+    # parser.add_argument('--source', type=str, default='0', help='file/dir/URL/glob')
     parser.add_argument('--yolo-weights', nargs='+', type=str, default=WEIGHTS / 'yolov5m.pt', help='model.pt path(s)')
     parser.add_argument('--strong-sort-weights', type=str, default=WEIGHTS / 'osnet_x0_25_msmt17.pt')
+
+    parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+
     parser.add_argument('--config-strongsort', type=str, default='strong_sort/configs/strong_sort.yaml')
-    parser.add_argument('--source', type=str, default='0', help='file/dir/URL/glob, 0 for webcam')
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640], help='inference size h,w')
     parser.add_argument('--conf-thres', type=float, default=0.5, help='confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.5, help='NMS IoU threshold')
     parser.add_argument('--max-det', type=int, default=1000, help='maximum detections per image')
-    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--show-vid', action='store_true', help='display tracking video results')
     parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
     parser.add_argument('--save-vid', action='store_true', help='save video tracking results')
@@ -337,7 +347,9 @@ def parse_opt():
     parser.add_argument('--project', default=ROOT / 'runs/track', help='save results to project/name')
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
+
     parser.add_argument('--line-thickness', default=3, type=int, help='bounding box thickness (pixels)')
+
     parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
     parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
     parser.add_argument('--hide-class', default=False, action='store_true', help='hide IDs')

@@ -175,32 +175,42 @@ class _RepeatSampler:
 
 class LoadImages:
     # YOLOv5 image/video dataloader, i.e. `python detect.py --source image.jpg/vid.mp4`
-    def __init__(self, path, img_size=640, stride=32, auto=True):
-        p = str(Path(path).resolve())  # os-agnostic absolute path
-        if '*' in p:
-            files = sorted(glob.glob(p, recursive=True))  # glob
-        elif os.path.isdir(p):
-            files = sorted(glob.glob(os.path.join(p, '*.*')))  # dir
-        elif os.path.isfile(p):
-            files = [p]  # files
+    def __init__(self, path_front, path_side, img_size=640, stride=32, auto=True):
+        p_front = str(Path(path_front).resolve())  # os-agnostic absolute path
+        if os.path.isfile(p_front) and os.path.isfile(p_front):
+            files_front = [p_front]  # files
         else:
-            raise Exception(f'ERROR: {p} does not exist')
+            raise Exception(f'ERROR: {p_front}  does not exist')
 
-        images = [x for x in files if x.split('.')[-1].lower() in IMG_FORMATS]
-        videos = [x for x in files if x.split('.')[-1].lower() in VID_FORMATS]
-        ni, nv = len(images), len(videos)
+        p_side = str(Path(path_side).resolve())  # os-agnostic absolute path
+        if os.path.isfile(p_side) and os.path.isfile(p_front):
+            files_side = [p_side]  # files
+        else:
+            raise Exception(f'ERROR: {p_side}  does not exist')
+
+        images_front  = [x for x in files_front if x.split('.')[-1].lower() in IMG_FORMATS]
+        videos_front  = [x for x in files_front if x.split('.')[-1].lower() in VID_FORMATS]
+        ni_f, nv_f = len(images_front), len(videos_front)
+
+        images_side = [x for x in files_side if x.split('.')[-1].lower() in IMG_FORMATS]
+        videos_side = [x for x in files_side if x.split('.')[-1].lower() in VID_FORMATS]
+        ni_s, nv_s = len(images_side), len(videos_side)
+        ni = min(ni_s, ni_f)
+        nv = min(nv_s, nv_f)
 
         self.img_size = img_size
+        LOGGER.info(f' img size {img_size}')
         self.stride = stride
-        self.files = images + videos
+        self.files = [(f, s) for f, s in zip(files_front, files_side)]
         self.nf = ni + nv  # number of files
         self.video_flag = [False] * ni + [True] * nv
         self.mode = 'image'
         self.auto = auto
-        if any(videos):
-            self.new_video(videos[0])  # new video
+        if any(videos_front) and any(videos_side):
+            self.new_video(videos_front[0] , videos_side[0]) # new video
         else:
-            self.cap = None
+            self.cap_front = None
+
         assert self.nf > 0, f'No images or videos found in {p}. ' \
                             f'Supported formats are:\nimages: {IMG_FORMATS}\nvideos: {VID_FORMATS}'
 
@@ -212,30 +222,24 @@ class LoadImages:
         if self.count == self.nf:
             raise StopIteration
         path = self.files[self.count]
-
         if self.video_flag[self.count]:
             # Read video
             self.mode = 'video'
-            ret_val, img0 = self.cap.read()
-            while not ret_val:
-                self.count += 1
-                self.cap.release()
-                if self.count == self.nf:  # last video
-                    raise StopIteration
-                path = self.files[self.count]
-                self.new_video(path)
-                ret_val, img0 = self.cap.read()
+            ret_val_f, img_f0 = self.cap_front.read()
+            ret_val_s, img_s0 = self.cap_side.read()
 
             self.frame += 1
-            s = f'video {self.count + 1}/{self.nf} ({self.frame}/{self.frames}) {path}: '
+            s = f'video {self.count + 1}/{self.nf} ({self.frame}/{self.frames_front}) {path}: '
 
         else:
             # Read image
             self.count += 1
-            img0 = cv2.imread(path)  # BGR
-            assert img0 is not None, f'Image Not Found {path}'
+            img_f0 = cv2.imread(path)  # BGR
+            img_s0 = cv2.imread(path)
+            assert img_f0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
-
+        LOGGER.info(f'img_f0 {img_f0.size}')
+        img0 = np.concatenate((img_f0, img_s0), axis=1)
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
 
@@ -243,12 +247,14 @@ class LoadImages:
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
 
-        return path, img, img0, self.cap, s
+        return path, img, img0, self.cap_front, self.cap_side, s
 
-    def new_video(self, path):
+    def new_video(self, path_front, path_side):
         self.frame = 0
-        self.cap = cv2.VideoCapture(path)
-        self.frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.cap_front = cv2.VideoCapture(path_front)
+        self.frames_front = int(self.cap_front.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.cap_side = cv2.VideoCapture(path_side)
+        self.frames_side = int(self.cap_front.get(cv2.CAP_PROP_FRAME_COUNT))
 
     def __len__(self):
         return self.nf  # number of files
