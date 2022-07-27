@@ -227,6 +227,10 @@ class LoadImages:
             self.mode = 'video'
             ret_val_f, img_f0 = self.cap_front.read()
             ret_val_s, img_s0 = self.cap_side.read()
+            if not ret_val_s or not ret_val_f:
+                self.cap_front.release()
+                self.cap_side.release()
+                raise StopIteration
 
             self.frame += 1
             s = f'video {self.count + 1}/{self.nf} ({self.frame}/{self.frames_front}) {path}: '
@@ -238,7 +242,6 @@ class LoadImages:
             img_s0 = cv2.imread(path)
             assert img_f0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
-        LOGGER.info(f'img_f0 {img_f0.size}')
         img0 = np.concatenate((img_f0, img_s0), axis=1)
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
