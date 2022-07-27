@@ -28,7 +28,7 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 import logging
 from yolov5.models.common import DetectMultiBackend
-from yolov5.utils.dataloaders import VID_FORMATS, LoadImages, LoadStreams
+from yolov5.utils.dataloaders import VID_FORMATS, LoadImages
 from yolov5.utils.general import (LOGGER, check_img_size, non_max_suppression, scale_coords, check_requirements, cv2,
                                   check_imshow, xyxy2xywh, increment_path, strip_optimizer, colorstr, print_args,
                                   check_file)
@@ -100,14 +100,12 @@ def run(
     imgsz = check_img_size(imgsz, s=stride)  # check image size
 
     # Dataloader
-    if webcam_f:
-        show_vid = check_imshow()
-        cudnn.benchmark = True  # set True to speed up constant image size inference
-        dataset = LoadStreams(source_front, img_size=imgsz, stride=stride, auto=pt)
-        nr_sources = len(dataset)
-    else:
-        dataset = LoadImages(source_front, source_side, img_size=imgsz, stride=stride, auto=pt)
-        nr_sources = 1
+
+    show_vid = check_imshow()
+    cudnn.benchmark = True  # set True to speed up constant image size inference
+
+    dataset = LoadImages(source_front, source_side, img_size=imgsz, stride=stride, auto=pt)
+    nr_sources = 1
     LOGGER.info(f'Dataset {dataset}')
     vid_path, vid_writer, txt_path = [None] * nr_sources, [None] * nr_sources, [None] * nr_sources
 
