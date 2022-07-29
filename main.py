@@ -1,8 +1,10 @@
 import argparse
+import math
 
 import os
 
 # limit the number of cpus used by high performance libraries
+
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -13,6 +15,13 @@ import sys
 from pathlib import Path
 import torch
 import torch.backends.cudnn as cudnn
+
+#lib to working with robo arm
+
+from Rooky import Rooky2
+arm = Rooky2.Rooky('/dev/RS_485', 'left')
+
+
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # yolov5 strongsort root directory
@@ -45,6 +54,17 @@ def check_path(source):
     is_url = source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
     webcam = source.isnumeric() or source.endswith('.txt') or (is_url and not is_file)
     return is_file, is_url, webcam
+
+arms_joints_dgs = {
+		'left_arm_1_joint' : 0,
+		'left_arm_2_joint' : 0,
+		'left_arm_3_joint' : 0,
+		'left_arm_4_joint' : 0,
+		'left_arm_5_joint' : 0,
+		'left_arm_6_joint' : 0,
+		'left_arm_7_joint' : 0,
+}
+
 
 @torch.no_grad()
 def run(
@@ -136,7 +156,7 @@ def run(
     model.warmup(imgsz=(1 if pt else nr_sources, 3, *imgsz))  # warmup
     dt, seen = [0.0, 0.0, 0.0, 0.0], 0
     curr_frames, prev_frames = [None] * nr_sources, [None] * nr_sources
-    for frame_idx, (path, im, im0s, vid_cap_f, vid_cap_s , s) in enumerate(dataset):
+    for frame_idx, (path, im, im0s, vid_cap_f, vid_cap_s, s) in enumerate(dataset):
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
         im = im.half() if half else im.float()  # uint8 to fp16/32
@@ -238,6 +258,7 @@ def run(
                 LOGGER.info('No detections')
             #calc dist
             left_socket, right_socket, left_end, right_end = None, None, None, None
+
             if len(sockets) > 1:
                 left_socket, right_socket = (sockets[0], sockets[1]) if sockets[0][0] < sockets[1][0] else (sockets[1], sockets[0])
             elif len(sockets)==1:
@@ -250,9 +271,10 @@ def run(
                 print(ends[0], im0.shape)
                 left_end = ends[0] if ends[0][0] < im0.shape[1]//2 else None
                 right_end = ends[0] if ends[0][0] > im0.shape[1] // 2 else None
-
+            h_dist_right, v_dist_right, h_dist_left, v_dist_left = None, None, None, None
+            d_l, d_r = 0, 0
             if left_socket is not None and left_end is not None:
-                d = 100/(left_socket[3]-left_socket[1]) #mm/px
+                d_l = 100/(left_socket[3]-left_socket[1]) #mm/px
                 left_s_h, left_s_v = (int(left_socket[0]+left_socket[2]))//2, int((left_socket[1]+left_socket[3]))//2
                 left_e_h, left_e_v = (int(left_end[0]+left_end[2]))//2, (int(left_end[1]+left_end[3]))//2,
                 h_dist_left = (left_s_h - left_e_h)
@@ -261,13 +283,13 @@ def run(
                 cv2.line(im0, (left_s_h, left_s_v), (left_e_h, left_e_v), (0, 50, 255), 2)
                 cv2.line(im0, (left_s_h, left_s_v), (left_s_h, left_e_v), (0, 50, 255), 3)
                 cv2.line(im0, (left_s_h, left_e_v), (left_e_h, left_e_v), (0, 50, 255), 3)
-                cv2.putText(im0, str(h_dist_left*d), color=(0, 255, 0), fontScale=1.5, thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                cv2.putText(im0, str(h_dist_left*d_l), color=(0, 255, 0), fontScale=1.5, thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                             org=(50, 200))
-                cv2.putText(im0, str(v_dist_left*d), color=(0, 255, 0), fontScale=1.5, thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                cv2.putText(im0, str(v_dist_left*d_l), color=(0, 255, 0), fontScale=1.5, thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                             org=(50, 250))
 
             if right_socket is not None and right_end is not None:
-                d = 100 / (right_socket[3] - right_socket[1])  # mm/px
+                d_r = 100 / (right_socket[3] - right_socket[1])  # mm/px
                 right_s_h, right_s_v = int((right_socket[0] + right_socket[2])) // 2, int((
                             right_socket[1] + right_socket[3])) // 2
 
@@ -279,10 +301,56 @@ def run(
                 cv2.line(im0, (right_s_h, right_s_v), (right_s_h, right_e_v), (0, 50, 255), 3)
                 cv2.line(im0, (right_s_h, right_e_v), (right_e_h, right_e_v), (0, 50, 255), 3)
 
-                cv2.putText(im0, str(h_dist_right*d), color=(0, 255, 0), fontScale=1.5,thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                cv2.putText(im0, str(h_dist_right*d_r), color=(0, 255, 0), fontScale=1.5,thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                             org=(im0.shape[1]//2, 200))
-                cv2.putText(im0, str(v_dist_right*d), color=(0, 255, 0), fontScale=1.5, thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                cv2.putText(im0, str(v_dist_right*d_r), color=(0, 255, 0), fontScale=1.5, thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                             org=(im0.shape[1]//2, 250))
+            # если не нашли руку, то попробуем её поднять
+            if len(ends)==0:
+                arm.move_joints([
+                {
+                    'name': 'left_arm_2_joint',
+                    'degree': 83
+                },
+                {
+                    'name': 'left_arm_4_joint',
+                    'degree': 30
+                },
+                    ], 2.5)
+                arms_joints_dgs['left_arm_2_joint']=83
+                arms_joints_dgs['left_arm_4_joint'] = 30
+
+            if h_dist_right:
+                if h_dist_right*d_r>55:
+                    arm.move_joints([
+                        {
+                            'name': 'left_arm_4_joint',
+                            'degree': arms_joints_dgs['left_arm_4_joint']-5
+                        }], 2)
+                    arms_joints_dgs['left_arm_4_joint']=arms_joints_dgs['left_arm_4_joint']-5
+            if abs(v_dist_right*d_r)>10:
+                if v_dist_right*d_r>0:
+                    dg = - math.atan(v_dist_right/h_dist_right)
+                else:
+                    dg = math.atan(v_dist_right/h_dist_right)
+                arm.move_joints([
+                    {
+                        'name': 'left_arm_2_joint',
+                        'degree': arms_joints_dgs['left_arm_2_joint'] + dg
+                    }], 2)
+
+            if h_dist_left:
+                if abs(h_dist_left)*d_r>55:
+                    if h_dist_left>0:
+                        dg = math.atan(h_dist_right / v_dist_right)
+                    else:
+                        dg = - math.atan(h_dist_right / v_dist_right)
+                arm.move_joints([
+                    {
+                        'name': 'left_arm_5_joint',
+                        'degree': arms_joints_dgs['left_arm_5_joint'] - dg
+                    }], 2)
+
             # Stream results
             im0 = annotator.result()
             if show_vid:
@@ -295,10 +363,10 @@ def run(
                     vid_path[i] = save_path
                     if isinstance(vid_writer[i], cv2.VideoWriter):
                         vid_writer[i].release()  # release previous video writer
-                    if vid_cap:  # video
-                        fps = vid_cap.get(cv2.CAP_PROP_FPS)
-                        w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                        h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    if vid_cap_f:  # video
+                        fps = vid_cap_f.get(cv2.CAP_PROP_FPS)
+                        w = int(vid_cap_f.get(cv2.CAP_PROP_FRAME_WIDTH))*2
+                        h = int(vid_cap_f.get(cv2.CAP_PROP_FRAME_HEIGHT))
                     else:  # stream
                         fps, w, h = 30, im0.shape[1], im0.shape[0]
                     save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
