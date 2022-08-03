@@ -1,12 +1,9 @@
-import argparse
-import time
-
 import math
-
+import time
 import os
 
 # limit the number of cpus used by high performance libraries
-from Rooky.python import Rooky2
+
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -25,22 +22,14 @@ ros_path = '/opt/ros/kinetic/lib/python2.7/dist-packages'
 if ros_path in sys.path:
     sys.path.remove(ros_path)
 
-import cv2
 
 sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 
-# Импортируем необходимые библиотеки
-# библиотека работы с ROS
-import rospy
 
-# Данный тип сообщений необходим для trajectory_msgs
-from std_msgs.msg import *
 
-# Сообщения для описания траектории движения
-from trajectory_msgs.msg import *
 
-#lib to working with robo arm
-
+from parse_args import parse_opt
+from calculate_dist import calc_draw_dist
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # yolov5 strongsort root directory
@@ -83,9 +72,27 @@ arms_joints_dgs = {
 		'left_arm_6_joint' : 0,
 		'left_arm_7_joint' : 0,
 }
+ros = True
+try:
+    #lib to working with robo arm
+    # Импортируем необходимые библиотеки
+    # библиотека работы с ROS
+    import rospy
 
-from move_joints import ControlJoints
+    # Данный тип сообщений необходим для trajectory_msgs
+    from std_msgs.msg import *
 
+    # Сообщения для описания траектории движения
+    from trajectory_msgs.msg import *
+
+    from move_joints import ControlJoints
+except ImportError:
+    LOGGER.warning("No ros lib found.")
+    ros = False
+try:
+    from Rooky.python import Rooky2
+except:
+    LOGGER.warning("No Rooky found")
 
 @torch.no_grad()
 def run(
@@ -115,18 +122,22 @@ def run(
         hide_conf=False,  # hide confidences
         hide_class=False,  # hide IDs
         half=False,  # use FP16 half-precision inference
-        ros=True
+        ros=ros,
+        not_move_arm=False
 ):
-    if ros:
-        rospy.init_node('joint_control_sim_test')
-        # Создадим узел ROS
-        node = ControlJoints("left")
+    if not not_move_arm:
+        if ros:
+            rospy.init_node('joint_control_sim_test')
+            # Создадим узел ROS
+            node = ControlJoints("left")
 
-        node._positions = [2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        node.move_all_joints(1.0)
-    else:
-        arm = Rooky2.Rooky('/dev/RS_485', 'left')
+            node._positions = [2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            node.move_all_joints(1.0)
+        else:
+            arm = Rooky2.Rooky('/dev/RS_485', 'left')
 
+        flag_can_move = True
+        time_end = -1
 
     flag_can_move = True
     time_end = -1
@@ -308,109 +319,89 @@ def run(
             h_dist_right, v_dist_right, h_dist_left, v_dist_left = None, None, None, None
             d_l, d_r = 0, 0
             if left_socket is not None and left_end is not None:
-                d_l = 100/(left_socket[3]-left_socket[1]) #mm/px
-                left_s_h, left_s_v = (int(left_socket[0]+left_socket[2]))//2, int((left_socket[1]+left_socket[3]))//2
-                left_e_h, left_e_v = (int(left_end[0]+left_end[2]))//2, (int(left_end[1]+left_end[3]))//2,
-                h_dist_left = (left_s_h - left_e_h)
-                v_dist_left = (left_s_v - left_e_v)
-
-                cv2.line(im0, (left_s_h, left_s_v), (left_e_h, left_e_v), (0, 50, 255), 2)
-                cv2.line(im0, (left_s_h, left_s_v), (left_s_h, left_e_v), (0, 50, 255), 3)
-                cv2.line(im0, (left_s_h, left_e_v), (left_e_h, left_e_v), (0, 50, 255), 3)
-                cv2.putText(im0, str(h_dist_left*d_l), color=(0, 255, 0), fontScale=1.5, thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                            org=(50, 200))
-                cv2.putText(im0, str(v_dist_left*d_l), color=(0, 255, 0), fontScale=1.5, thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                            org=(50, 250))
+                im0, d_l, h_dist_left, v_dist_left = calc_draw_dist(im0, left_socket, left_end)
 
             if right_socket is not None and right_end is not None:
-                d_r = 100 / (right_socket[3] - right_socket[1])  # mm/px
-                right_s_h, right_s_v = int((right_socket[0] + right_socket[2])) // 2, int((
-                            right_socket[1] + right_socket[3])) // 2
+                im0, d_r, h_dist_right, v_dist_right = calc_draw_dist(im0, right_socket, right_end)
 
-                right_e_h, right_e_v = (int(right_end[0] + right_end[2]) // 2), (int(right_end[1] + right_end[3]) // 2),
-                h_dist_right = (right_s_h - right_e_h)
-                v_dist_right = (right_s_v - right_e_v)
 
-                cv2.line(im0, (right_s_h, right_s_v), (right_e_h, right_e_v), (0, 50, 255), 3)
-                cv2.line(im0, (right_s_h, right_s_v), (right_s_h, right_e_v), (0, 50, 255), 3)
-                cv2.line(im0, (right_s_h, right_e_v), (right_e_h, right_e_v), (0, 50, 255), 3)
-
-                cv2.putText(im0, str(h_dist_right*d_r), color=(0, 255, 0), fontScale=1.5,thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                            org=(im0.shape[1]//2, 200))
-                cv2.putText(im0, str(v_dist_right*d_r), color=(0, 255, 0), fontScale=1.5, thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                            org=(im0.shape[1]//2, 250))
-            # если не нашли руку, то попробуем её поднять
-            if flag_can_move:
-                if len(ends)==0:
-                    time_end = time.time()
-                    print('no arm')
-                    if ros:
-                        node.move_joint('left_arm_1_joint', 0.5, 1)
-                        node.move_joint('left_arm_4_joint', 0.5, 1)
-                        arms_joints_dgs['left_arm_1_joint'] = 0.5
-                        arms_joints_dgs['left_arm_4_joint'] = 0.5
-                    else:
-                        arm.move_joints([
-                        {
-                            'name': 'left_arm_2_joint',
-                            'degree': 70
-                        },
-                        {
-                            'name': 'left_arm_4_joint',
-                            'degree': 30
-                        },
-                            ], 2.5)
-                        arms_joints_dgs['left_arm_1_joint'] = 70
-                        arms_joints_dgs['left_arm_4_joint'] = 30
-
-                    flag_can_move = False
-                    time_end = time_end+1
-
-                if h_dist_right:
-                    #move arm little closer
-                    if abs(h_dist_right*d_r)>60:
+            # # если не нашли руку, то попробуем её поднять
+            if not not_move_arm:
+                if flag_can_move:
+                    if len(ends)==0:
+                        time_end = time.time()
+                        print('no arm')
                         if ros:
-                            node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint']+0.05, 1)
+                            node.move_joint('left_arm_1_joint', 0.5, 1)
+                            node.move_joint('left_arm_4_joint', 0.5, 1)
+                            arms_joints_dgs['left_arm_1_joint'] = 0.5
+                            arms_joints_dgs['left_arm_4_joint'] = 0.5
                         else:
                             arm.move_joints([
-                                {
-                                    'name': 'left_arm_4_joint',
-                                    'degree': arms_joints_dgs['left_arm_4_joint']+5
-                                }], 2)
-                        arms_joints_dgs['left_arm_4_joint']=arms_joints_dgs['left_arm_4_joint']+0.05
-                        flag_can_move = False
-                        time_end = time_end + 1
-                if v_dist_right:
-                    if abs(v_dist_right*d_r)>10:
-                        if ros:
-                            dg = math.atan(v_dist_right/h_dist_right)*2/math.pi
-                        else:
-                            dg = math.atan(v_dist_right / h_dist_right)
-                        print('left_arm_1_joint'+' '+str(dg)+' '+str(arms_joints_dgs['left_arm_1_joint'] - dg))
-                        node.move_joint('left_arm_1_joint', arms_joints_dgs['left_arm_1_joint']-dg, 1)
-                        # node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint'] - dg/5, 1)
-                        flag_can_move = False
-                        time_end = time_end + 1.5
-                        if ros:
-                            arms_joints_dgs['left_arm_1_joint'] = arms_joints_dgs['left_arm_1_joint'] - dg
-                        else:
-                            arm.move_joints([
-                                {
-                                    'name': 'left_arm_1_joint',
-                                    'degree': arms_joints_dgs['left_arm_2_joint'] - dg
-                                }], 2)
+                            {
+                                'name': 'left_arm_2_joint',
+                                'degree': 70
+                            },
+                            {
+                                'name': 'left_arm_4_joint',
+                                'degree': 30
+                            },
+                                ], 2.5)
+                            arms_joints_dgs['left_arm_1_joint'] = 70
+                            arms_joints_dgs['left_arm_4_joint'] = 30
 
-                if h_dist_left:
-                    if abs(h_dist_left)*d_r>55:
-                        node.move_joint('left_arm_5_joint', arms_joints_dgs['left_arm_5_joint'] +0.05, 1)
                         flag_can_move = False
                         time_end = time_end+1
-                        arms_joints_dgs['left_arm_5_joint']  = arms_joints_dgs['left_arm_5_joint'] + 0.05
-                    # arm.move_joints([
-                    #     {
-                    #         'name': 'left_arm_5_joint',
-                    #         'degree': arms_joints_dgs['left_arm_5_joint'] - dg
-                    #     }], 2)
+
+                    if h_dist_right:
+                        #move arm little closer
+                        if abs(h_dist_right*d_r)>60:
+                            if ros:
+                                node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint']+0.05, 1)
+                            else:
+                                arm.move_joints([
+                                    {
+                                        'name': 'left_arm_4_joint',
+                                        'degree': arms_joints_dgs['left_arm_4_joint']+5
+                                    }], 2)
+                            arms_joints_dgs['left_arm_4_joint']=arms_joints_dgs['left_arm_4_joint']+0.05
+                            flag_can_move = False
+                            time_end = time_end + 1
+                    if v_dist_right:
+                        if abs(v_dist_right*d_r)>10:
+                            if ros:
+                                dg = math.atan(v_dist_right/h_dist_right)*2/math.pi
+                            else:
+                                dg = math.atan(v_dist_right / h_dist_right)
+                            print('left_arm_1_joint'+' '+str(dg)+' '+str(arms_joints_dgs['left_arm_1_joint'] - dg))
+                            node.move_joint('left_arm_1_joint', arms_joints_dgs['left_arm_1_joint']-dg, 1)
+                            # node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint'] - dg/5, 1)
+                            flag_can_move = False
+                            time_end = time_end + 1.5
+                            if ros:
+                                arms_joints_dgs['left_arm_1_joint'] = arms_joints_dgs['left_arm_1_joint'] - dg
+                            else:
+                                arm.move_joints([
+                                    {
+                                        'name': 'left_arm_1_joint',
+                                        'degree': arms_joints_dgs['left_arm_2_joint'] - dg
+                                    }], 2)
+
+                    if h_dist_left:
+                        if abs(h_dist_left)*d_r>55:
+                            flag_can_move = False
+                            time_end = time_end + 1
+                            if ros:
+                                node.move_joint('left_arm_5_joint', arms_joints_dgs['left_arm_5_joint'] +0.05, 1)
+                                arms_joints_dgs['left_arm_5_joint'] = arms_joints_dgs['left_arm_5_joint'] + 0.05
+
+                            else:
+                                arm.move_joints([
+                                    {
+                                        'name': 'left_arm_5_joint',
+                                        'degree': arms_joints_dgs['left_arm_5_joint'] - 5
+                                    }], 2)
+
             if time.time()>time_end:
                 flag_can_move = True
             # Stream results
@@ -448,45 +439,6 @@ def run(
     if update:
         strip_optimizer(yolo_weights)  # update model (to fix SourceChangeWarning)
 
-
-def parse_opt():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--source-front', type=str, default='0', help='file/dir/URL/glob')
-    parser.add_argument('--source-side', type=str, default='0', help='file/dir/URL/glob')
-    # parser.add_argument('--source', type=str, default='0', help='file/dir/URL/glob')
-    parser.add_argument('--yolo-weights', nargs='+', type=str, default=WEIGHTS / 'yolov5m.pt', help='model.pt path(s)')
-    parser.add_argument('--strong-sort-weights', type=str, default=WEIGHTS / 'osnet_x0_25_msmt17.pt')
-
-    parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-
-    parser.add_argument('--config-strongsort', type=str, default='strong_sort/configs/strong_sort.yaml')
-    parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640], help='inference size h,w')
-    parser.add_argument('--conf-thres', type=float, default=0.5, help='confidence threshold')
-    parser.add_argument('--iou-thres', type=float, default=0.5, help='NMS IoU threshold')
-    parser.add_argument('--max-det', type=int, default=1000, help='maximum detections per image')
-    parser.add_argument('--show-vid', action='store_true', help='display tracking video results')
-    parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
-    parser.add_argument('--save-vid', action='store_true', help='save video tracking results')
-    # class 0 is person, 1 is bycicle, 2 is car... 79 is oven
-    parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --classes 0, or --classes 0 2 3')
-    parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
-    parser.add_argument('--augment', action='store_true', help='augmented inference')
-    parser.add_argument('--visualize', action='store_true', help='visualize features')
-    parser.add_argument('--update', action='store_true', help='update all models')
-    parser.add_argument('--project', default=ROOT / 'runs/track', help='save results to project/name')
-    parser.add_argument('--name', default='exp', help='save results to project/name')
-    parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
-
-    parser.add_argument('--line-thickness', default=3, type=int, help='bounding box thickness (pixels)')
-
-    parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
-    parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
-    parser.add_argument('--hide-class', default=False, action='store_true', help='hide IDs')
-    parser.add_argument('--ros', default=True, action='store_true', help='using ros or direct control')
-    opt = parser.parse_args()
-    opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
-    print_args(vars(opt))
-    return opt
 
 
 def main(opt):

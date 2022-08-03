@@ -28,7 +28,7 @@ Cython
 h5py
 six
 future
-yacs~
+yacs
 gdown
 flake8
 yapf
