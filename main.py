@@ -1,4 +1,6 @@
 import argparse
+import time
+
 import math
 
 import os
@@ -16,11 +18,27 @@ from pathlib import Path
 import torch
 import torch.backends.cudnn as cudnn
 
+
+ros_path = '/opt/ros/kinetic/lib/python2.7/dist-packages'
+
+if ros_path in sys.path:
+    sys.path.remove(ros_path)
+
+import cv2
+
+sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
+
+# Импортируем необходимые библиотеки
+# библиотека работы с ROS
+import rospy
+
+# Данный тип сообщений необходим для trajectory_msgs
+from std_msgs.msg import *
+
+# Сообщения для описания траектории движения
+from trajectory_msgs.msg import *
+
 #lib to working with robo arm
-
-from Rooky import Rooky2
-arm = Rooky2.Rooky('/dev/RS_485', 'left')
-
 
 
 FILE = Path(__file__).resolve()
@@ -65,6 +83,15 @@ arms_joints_dgs = {
 		'left_arm_7_joint' : 0,
 }
 
+from move_joints import ControlJoints
+rospy.init_node('joint_control_sim_test')
+
+# Создадим узел ROS
+node = ControlJoints("left")
+
+node._positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+node.move_all_joints(1.0)
+
 
 @torch.no_grad()
 def run(
@@ -95,6 +122,9 @@ def run(
         hide_class=False,  # hide IDs
         half=False,  # use FP16 half-precision inference
 ):
+    flag_can_move = True
+    time_end = -1
+
     source_front = str(source_front)
     source_side = str(source_side)
 
@@ -126,7 +156,6 @@ def run(
 
     dataset = LoadImages(source_front, source_side, img_size=imgsz, stride=stride, auto=pt)
     nr_sources = 1
-    LOGGER.info(f'Dataset {dataset}')
     vid_path, vid_writer, txt_path = [None] * nr_sources, [None] * nr_sources, [None] * nr_sources
 
     # initialize StrongSORT
@@ -151,7 +180,6 @@ def run(
             )
         )
     outputs = [None] * nr_sources
-
     # Run tracking
     model.warmup(imgsz=(1 if pt else nr_sources, 3, *imgsz))  # warmup
     dt, seen = [0.0, 0.0, 0.0, 0.0], 0
@@ -187,7 +215,7 @@ def run(
             if webcam_f:  # nr_sources >= 1
                 p, im0, _ = path[i], im0s[i].copy(), dataset.count
                 p = Path(p)  # to Path
-                s += f'{i}: '
+                s += (str(i)+':')
                 txt_file_name = p.name
                 save_path = str(save_dir / p.name)  # im.jpg, vid.mp4, ...
             else:
@@ -218,6 +246,7 @@ def run(
                 # Print results
                 for c in det[:, -1].unique():
                     n = (det[:, -1] == c).sum()  # detections per class
+                    s += str(n)
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                 xywhs = xyxy2xywh(det[:, 0:4])
@@ -306,54 +335,74 @@ def run(
                 cv2.putText(im0, str(v_dist_right*d_r), color=(0, 255, 0), fontScale=1.5, thickness=3, fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                             org=(im0.shape[1]//2, 250))
             # если не нашли руку, то попробуем её поднять
-            if len(ends)==0:
-                arm.move_joints([
-                {
-                    'name': 'left_arm_2_joint',
-                    'degree': 83
-                },
-                {
-                    'name': 'left_arm_4_joint',
-                    'degree': 30
-                },
-                    ], 2.5)
-                arms_joints_dgs['left_arm_2_joint']=83
-                arms_joints_dgs['left_arm_4_joint'] = 30
+            if flag_can_move:
+                time_end=time.time()
+                if len(ends)==0:
+                    LOGGER.info('no arm')
+                    node.move_joint('left_arm_1_joint', 1, 1)
+                    node.move_joint('left_arm_4_joint', 1, 1)
+                    # arm.move_joints([
+                    # {
+                    #     'name': 'left_arm_2_joint',
+                    #     'degree': 83
+                    # },
+                    # {
+                    #     'name': 'left_arm_4_joint',
+                    #     'degree': 30
+                    # },
+                    #     ], 2.5)
+                    arms_joints_dgs['left_arm_2_joint']=1
+                    arms_joints_dgs['left_arm_4_joint'] = 1
+                    flag_can_move = False
+                    time_end = time_end+1
 
-            if h_dist_right:
-                if h_dist_right*d_r>55:
-                    arm.move_joints([
-                        {
-                            'name': 'left_arm_4_joint',
-                            'degree': arms_joints_dgs['left_arm_4_joint']-5
-                        }], 2)
-                    arms_joints_dgs['left_arm_4_joint']=arms_joints_dgs['left_arm_4_joint']-5
-            if abs(v_dist_right*d_r)>10:
-                if v_dist_right*d_r>0:
-                    dg = - math.atan(v_dist_right/h_dist_right)
-                else:
-                    dg = math.atan(v_dist_right/h_dist_right)
-                arm.move_joints([
-                    {
-                        'name': 'left_arm_2_joint',
-                        'degree': arms_joints_dgs['left_arm_2_joint'] + dg
-                    }], 2)
+                if h_dist_right:
+                    if h_dist_right*d_r>55:
+                        LOGGER.info('left_arm_4_joint'+" "+str(arms_joints_dgs['left_arm_4_joint']-0.05))
+                        node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint']-0.05, 1)
+                        # arm.move_joints([
+                        #     {
+                        #         'name': 'left_arm_4_joint',
+                        #         'degree': arms_joints_dgs['left_arm_4_joint']-5
+                        #     }], 2)
+                        arms_joints_dgs['left_arm_4_joint']=arms_joints_dgs['left_arm_4_joint']-0.05
+                        flag_can_move = False
+                        time_end = time_end + 1
+                if v_dist_right:
+                    if abs(v_dist_right*d_r)>10:
+                        if v_dist_right*d_r>0:
+                            dg = - math.atan(v_dist_right/h_dist_right)/100
+                        else:
+                            dg = math.atan(v_dist_right/h_dist_right)/100
+                        LOGGER.info('left_arm_1_joint'+' '+str(dg)+' '+str(arms_joints_dgs['left_arm_1_joint'] + dg))
+                        node.move_joint('left_arm_1_joint', arms_joints_dgs['left_arm_1_joint']+dg, 3)
 
-            if h_dist_left:
-                if abs(h_dist_left)*d_r>55:
-                    if h_dist_left>0:
-                        dg = math.atan(h_dist_right / v_dist_right)
-                    else:
-                        dg = - math.atan(h_dist_right / v_dist_right)
-                arm.move_joints([
-                    {
-                        'name': 'left_arm_5_joint',
-                        'degree': arms_joints_dgs['left_arm_5_joint'] - dg
-                    }], 2)
+                        # arm.move_joints([
+                        #     {
+                        #         'name': 'left_arm_2_joint',
+                        #         'degree': arms_joints_dgs['left_arm_2_joint'] + dg
+                        #     }], 2)
 
+                if h_dist_left:
+                    if abs(h_dist_left)*d_r>55:
+                        if h_dist_left>0:
+                            dg = math.atan(h_dist_right / v_dist_right)/100
+                        else:
+                            dg = - math.atan(h_dist_right / v_dist_right)/100
+                    node.move_joint('left_arm_5_joint', arms_joints_dgs['left_arm_5_joint'] - dg, 3)
+                    flag_can_move = False
+                    time_end = time_end+1
+                    # arm.move_joints([
+                    #     {
+                    #         'name': 'left_arm_5_joint',
+                    #         'degree': arms_joints_dgs['left_arm_5_joint'] - dg
+                    #     }], 2)
+            if time.time()>time_end:
+                flag_can_move = True
             # Stream results
             im0 = annotator.result()
             if show_vid:
+                im0 = cv2.resize(im0, (im0.shape[1]//5, im0.shape[0]//5))
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
 
