@@ -38,3 +38,7 @@ beautifulsoup4
 nose
 comtypes
 setuptools
+
+# Rooky
+
+serial

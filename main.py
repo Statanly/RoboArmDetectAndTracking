@@ -6,6 +6,7 @@ import math
 import os
 
 # limit the number of cpus used by high performance libraries
+from Rooky.python import Rooky2
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -84,13 +85,6 @@ arms_joints_dgs = {
 }
 
 from move_joints import ControlJoints
-rospy.init_node('joint_control_sim_test')
-
-# Создадим узел ROS
-node = ControlJoints("left")
-
-node._positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-node.move_all_joints(1.0)
 
 
 @torch.no_grad()
@@ -121,7 +115,19 @@ def run(
         hide_conf=False,  # hide confidences
         hide_class=False,  # hide IDs
         half=False,  # use FP16 half-precision inference
+        ros=True
 ):
+    if ros:
+        rospy.init_node('joint_control_sim_test')
+        # Создадим узел ROS
+        node = ControlJoints("left")
+
+        node._positions = [2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        node.move_all_joints(1.0)
+    else:
+        arm = Rooky2.Rooky('/dev/RS_485', 'left')
+
+
     flag_can_move = True
     time_end = -1
 
@@ -297,7 +303,6 @@ def run(
             if len(ends) > 1:
                 left_end, right_end = (ends[0], ends[1]) if ends[0][0] < ends[1][0] else (ends[1], ends[0])
             elif len(ends)==1:
-                print(ends[0], im0.shape)
                 left_end = ends[0] if ends[0][0] < im0.shape[1]//2 else None
                 right_end = ends[0] if ends[0][0] > im0.shape[1] // 2 else None
             h_dist_right, v_dist_right, h_dist_left, v_dist_left = None, None, None, None
@@ -336,62 +341,71 @@ def run(
                             org=(im0.shape[1]//2, 250))
             # если не нашли руку, то попробуем её поднять
             if flag_can_move:
-                time_end=time.time()
                 if len(ends)==0:
-                    LOGGER.info('no arm')
-                    node.move_joint('left_arm_1_joint', 1, 1)
-                    node.move_joint('left_arm_4_joint', 1, 1)
-                    # arm.move_joints([
-                    # {
-                    #     'name': 'left_arm_2_joint',
-                    #     'degree': 83
-                    # },
-                    # {
-                    #     'name': 'left_arm_4_joint',
-                    #     'degree': 30
-                    # },
-                    #     ], 2.5)
-                    arms_joints_dgs['left_arm_2_joint']=1
-                    arms_joints_dgs['left_arm_4_joint'] = 1
+                    time_end = time.time()
+                    print('no arm')
+                    if ros:
+                        node.move_joint('left_arm_1_joint', 0.5, 1)
+                        node.move_joint('left_arm_4_joint', 0.5, 1)
+                        arms_joints_dgs['left_arm_1_joint'] = 0.5
+                        arms_joints_dgs['left_arm_4_joint'] = 0.5
+                    else:
+                        arm.move_joints([
+                        {
+                            'name': 'left_arm_2_joint',
+                            'degree': 70
+                        },
+                        {
+                            'name': 'left_arm_4_joint',
+                            'degree': 30
+                        },
+                            ], 2.5)
+                        arms_joints_dgs['left_arm_1_joint'] = 70
+                        arms_joints_dgs['left_arm_4_joint'] = 30
+
                     flag_can_move = False
                     time_end = time_end+1
 
                 if h_dist_right:
-                    if h_dist_right*d_r>55:
-                        LOGGER.info('left_arm_4_joint'+" "+str(arms_joints_dgs['left_arm_4_joint']-0.05))
-                        node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint']-0.05, 1)
-                        # arm.move_joints([
-                        #     {
-                        #         'name': 'left_arm_4_joint',
-                        #         'degree': arms_joints_dgs['left_arm_4_joint']-5
-                        #     }], 2)
-                        arms_joints_dgs['left_arm_4_joint']=arms_joints_dgs['left_arm_4_joint']-0.05
+                    #move arm little closer
+                    if abs(h_dist_right*d_r)>60:
+                        if ros:
+                            node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint']+0.05, 1)
+                        else:
+                            arm.move_joints([
+                                {
+                                    'name': 'left_arm_4_joint',
+                                    'degree': arms_joints_dgs['left_arm_4_joint']+5
+                                }], 2)
+                        arms_joints_dgs['left_arm_4_joint']=arms_joints_dgs['left_arm_4_joint']+0.05
                         flag_can_move = False
                         time_end = time_end + 1
                 if v_dist_right:
                     if abs(v_dist_right*d_r)>10:
-                        if v_dist_right*d_r>0:
-                            dg = - math.atan(v_dist_right/h_dist_right)/100
+                        if ros:
+                            dg = math.atan(v_dist_right/h_dist_right)*2/math.pi
                         else:
-                            dg = math.atan(v_dist_right/h_dist_right)/100
-                        LOGGER.info('left_arm_1_joint'+' '+str(dg)+' '+str(arms_joints_dgs['left_arm_1_joint'] + dg))
-                        node.move_joint('left_arm_1_joint', arms_joints_dgs['left_arm_1_joint']+dg, 3)
-
-                        # arm.move_joints([
-                        #     {
-                        #         'name': 'left_arm_2_joint',
-                        #         'degree': arms_joints_dgs['left_arm_2_joint'] + dg
-                        #     }], 2)
+                            dg = math.atan(v_dist_right / h_dist_right)
+                        print('left_arm_1_joint'+' '+str(dg)+' '+str(arms_joints_dgs['left_arm_1_joint'] - dg))
+                        node.move_joint('left_arm_1_joint', arms_joints_dgs['left_arm_1_joint']-dg, 1)
+                        # node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint'] - dg/5, 1)
+                        flag_can_move = False
+                        time_end = time_end + 1.5
+                        if ros:
+                            arms_joints_dgs['left_arm_1_joint'] = arms_joints_dgs['left_arm_1_joint'] - dg
+                        else:
+                            arm.move_joints([
+                                {
+                                    'name': 'left_arm_1_joint',
+                                    'degree': arms_joints_dgs['left_arm_2_joint'] - dg
+                                }], 2)
 
                 if h_dist_left:
                     if abs(h_dist_left)*d_r>55:
-                        if h_dist_left>0:
-                            dg = math.atan(h_dist_right / v_dist_right)/100
-                        else:
-                            dg = - math.atan(h_dist_right / v_dist_right)/100
-                    node.move_joint('left_arm_5_joint', arms_joints_dgs['left_arm_5_joint'] - dg, 3)
-                    flag_can_move = False
-                    time_end = time_end+1
+                        node.move_joint('left_arm_5_joint', arms_joints_dgs['left_arm_5_joint'] +0.05, 1)
+                        flag_can_move = False
+                        time_end = time_end+1
+                        arms_joints_dgs['left_arm_5_joint']  = arms_joints_dgs['left_arm_5_joint'] + 0.05
                     # arm.move_joints([
                     #     {
                     #         'name': 'left_arm_5_joint',
@@ -468,6 +482,7 @@ def parse_opt():
     parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
     parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
     parser.add_argument('--hide-class', default=False, action='store_true', help='hide IDs')
+    parser.add_argument('--ros', default=True, action='store_true', help='using ros or direct control')
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     print_args(vars(opt))
