@@ -1,6 +1,6 @@
 import cv2
 
-def calc_draw_dist(im0, socket, end):
+def calc_draw_dist(im0, socket, end, right=False):
     d_l = 100 / (socket[3] - socket[1])  # mm/px
     s_h, s_v = (int(socket[0] + socket[2])) // 2, int((socket[1] + socket[3])) // 2
     e_h, e_v = (int(end[0] + end[2])) // 2, (int(end[1] + end[3])) // 2,
@@ -10,10 +10,13 @@ def calc_draw_dist(im0, socket, end):
     cv2.line(im0, (s_h, s_v), (e_h, e_v), (0, 50, 255), 2)
     cv2.line(im0, (s_h, s_v), (s_h, e_v), (0, 50, 255), 3)
     cv2.line(im0, (s_h, e_v), (e_h, e_v), (0, 50, 255), 3)
+    pos = 50
+    if right:
+        pos=pos + im0.shape[1]//2
     cv2.putText(im0, str(h_dist * d_l), color=(0, 255, 0), fontScale=1.5, thickness=3,
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                org=(50, 200))
+                org=(pos, 200))
     cv2.putText(im0, str(v_dist * d_l), color=(0, 255, 0), fontScale=1.5, thickness=3,
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                org=(50, 250))
+                org=(pos, 250))
     return im0, d_l, h_dist, v_dist

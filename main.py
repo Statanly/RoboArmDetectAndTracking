@@ -147,8 +147,6 @@ def run(
 
     is_url_f, is_file_f, webcam_f = check_path(source_front)
 
-    is_url_s, is_file_s, webcam_s = check_path(source_side)
-
     # Directories
     if not isinstance(yolo_weights, list):  # single yolo model
         exp_name = str(yolo_weights).rsplit('/', 1)[-1].split('.')[0]
@@ -322,7 +320,7 @@ def run(
                 im0, d_l, h_dist_left, v_dist_left = calc_draw_dist(im0, left_socket, left_end)
 
             if right_socket is not None and right_end is not None:
-                im0, d_r, h_dist_right, v_dist_right = calc_draw_dist(im0, right_socket, right_end)
+                im0, d_r, h_dist_right, v_dist_right = calc_draw_dist(im0, right_socket, right_end, right=True)
 
 
             # # если не нашли руку, то попробуем её поднять
