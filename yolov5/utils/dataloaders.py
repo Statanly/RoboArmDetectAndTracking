@@ -193,7 +193,7 @@ class LoadImages:
             img_s0 = cv2.imread(path)
             assert img_f0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
-        img0 = np.concatenate((img_s0, img_f0), axis=1)
+        img0 = np.concatenate((img_f0, img_s0), axis=1)
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
 
