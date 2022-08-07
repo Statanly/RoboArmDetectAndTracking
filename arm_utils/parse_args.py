@@ -13,7 +13,7 @@ if str(ROOT / 'yolov5') not in sys.path:
 
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
-from yolov5.utils.general import print_args
+
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--source-front', type=str, default='0', help='file/dir/URL/glob')
@@ -48,5 +48,4 @@ def parse_opt():
     parser.add_argument('--not-move-arm', default=False, action='store_true', help='move arm or just visualize')
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
-    print_args(vars(opt))
     return opt

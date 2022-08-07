@@ -25,8 +25,8 @@ import cv2
 
 sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 
-from utils.parse_args import parse_opt
-from utils.utils import calc_draw_dist, found_sockets_ends
+from arm_utils.parse_args import parse_opt
+from arm_utils.utils import calc_draw_dist, found_sockets_ends
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # yolov5 strongsort root directory
@@ -45,14 +45,14 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 import logging
 from yolov5.models.common import DetectMultiBackend
 # from yolov5.utils.dataloaders import VID_FORMATS, LoadImages
-from utils.utils import VID_FORMATS, LoadImages
+from arm_utils.dataloaders import VID_FORMATS, LoadImages
 from yolov5.utils.general import (LOGGER, check_img_size, non_max_suppression, scale_coords, check_requirements,
                                   check_imshow, xyxy2xywh, increment_path, strip_optimizer, colorstr)
 from yolov5.utils.torch_utils import select_device, time_sync
 from yolov5.utils.plots import Annotator, colors
 from strong_sort.utils.parser import get_config
 from strong_sort.strong_sort import StrongSORT
-
+from yolov5.utils.general import print_args
 # remove duplicated stream handler to avoid duplicated logging
 logging.getLogger().removeHandler(logging.getLogger().handlers[0])
 
@@ -433,4 +433,6 @@ def main(opt):
 
 if __name__ == "__main__":
     opt = parse_opt()
+    print_args(opt)
+
     main(opt)
