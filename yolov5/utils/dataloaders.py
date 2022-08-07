@@ -128,24 +128,30 @@ class _RepeatSampler:
 class LoadImages:
     # YOLOv5 image/video dataloader, i.e. `python detect.py --source image.jpg/vid.mp4`
     def __init__(self, path_front, path_side, img_size=640, stride=32, auto=True):
-        p_front = str(Path(path_front).resolve())  # os-agnostic absolute path
-        if os.path.isfile(p_front) and os.path.isfile(p_front):
+        p_front = str(path_front)  # os-agnostic absolute pa
+        is_url_front = p_front.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
+        if not is_url_front:
+            p_front = str(Path(path_front).resolve())
+        if os.path.isfile(p_front) or is_url_front:
             files_front = [p_front]  # files
         else:
             raise Exception(f'ERROR: {p_front}  does not exist')
 
-        p_side = str(Path(path_side).resolve())  # os-agnostic absolute path
-        if os.path.isfile(p_side) and os.path.isfile(p_front):
+        p_side = str(path_side)
+        is_url_side = p_side.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
+        if not is_url_side:
+            p_side = str(Path(path_side).resolve())  # os-agnostic absolute path
+        if os.path.isfile(p_side) or is_url_side:
             files_side = [p_side]  # files
         else:
             raise Exception(f'ERROR: {p_side}  does not exist')
 
-        images_front  = [x for x in files_front if x.split('.')[-1].lower() in IMG_FORMATS]
-        videos_front  = [x for x in files_front if x.split('.')[-1].lower() in VID_FORMATS]
+        images_front  = [x for x in files_front if (x.split('.')[-1].lower() in IMG_FORMATS) ]
+        videos_front  = [x for x in files_front if x.split('.')[-1].lower() in VID_FORMATS or (x.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://')))]
         ni_f, nv_f = len(images_front), len(videos_front)
 
         images_side = [x for x in files_side if x.split('.')[-1].lower() in IMG_FORMATS]
-        videos_side = [x for x in files_side if x.split('.')[-1].lower() in VID_FORMATS]
+        videos_side = [x for x in files_side if x.split('.')[-1].lower() in VID_FORMATS or (x.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://')))]
         ni_s, nv_s = len(images_side), len(videos_side)
         ni = min(ni_s, ni_f)
         nv = min(nv_s, nv_f)
@@ -162,7 +168,7 @@ class LoadImages:
         else:
             self.cap_front = None
 
-        assert self.nf > 0, f'No images or videos found in {p}. ' \
+        assert self.nf > 0, f'No images or videos found in {p_front} or {p_side}. ' \
                             f'Supported formats are:\nimages: {IMG_FORMATS}\nvideos: {VID_FORMATS}'
 
     def __iter__(self):
@@ -194,6 +200,7 @@ class LoadImages:
             assert img_f0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
         img0 = np.concatenate((img_f0, img_s0), axis=1)
+        cv2.imshow('t', img0)
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
 
