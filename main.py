@@ -16,17 +16,14 @@ from pathlib import Path
 import torch
 import torch.backends.cudnn as cudnn
 
-
 ros_path = '/opt/ros/kinetic/lib/python2.7/dist-packages'
 
 if ros_path in sys.path:
     sys.path.remove(ros_path)
 
+import cv2
 
 sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
-
-
-
 
 from parse_args import parse_opt
 from calculate_dist import calc_draw_dist
@@ -41,21 +38,23 @@ if str(ROOT / 'yolov5') not in sys.path:
     sys.path.append(str(ROOT / 'yolov5'))  # add yolov5 ROOT to PATH
 if str(ROOT / 'strong_sort') not in sys.path:
     sys.path.append(str(ROOT / 'strong_sort'))  # add strong_sort ROOT to PATH
+if str(ROOT / 'Rooky' / 'python') not in sys.path:
+    sys.path.append(str(ROOT / 'Rooky' / 'python'))  # add Rooky ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 import logging
 from yolov5.models.common import DetectMultiBackend
 from yolov5.utils.dataloaders import VID_FORMATS, LoadImages
-from yolov5.utils.general import (LOGGER, check_img_size, non_max_suppression, scale_coords, check_requirements, cv2,
-                                  check_imshow, xyxy2xywh, increment_path, strip_optimizer, colorstr, print_args,
-                                  check_file)
+from yolov5.utils.general import (LOGGER, check_img_size, non_max_suppression, scale_coords, check_requirements,
+                                  check_imshow, xyxy2xywh, increment_path, strip_optimizer, colorstr)
 from yolov5.utils.torch_utils import select_device, time_sync
-from yolov5.utils.plots import Annotator, colors, save_one_box
+from yolov5.utils.plots import Annotator, colors
 from strong_sort.utils.parser import get_config
 from strong_sort.strong_sort import StrongSORT
 
 # remove duplicated stream handler to avoid duplicated logging
 logging.getLogger().removeHandler(logging.getLogger().handlers[0])
+
 
 def check_path(source):
     is_file = Path(source).suffix[1:] in (VID_FORMATS)
@@ -63,18 +62,19 @@ def check_path(source):
     webcam = source.isnumeric() or source.endswith('.txt') or (is_url and not is_file)
     return is_file, is_url, webcam
 
+
 arms_joints_dgs = {
-		'left_arm_1_joint' : 0,
-		'left_arm_2_joint' : 0,
-		'left_arm_3_joint' : 0,
-		'left_arm_4_joint' : 0,
-		'left_arm_5_joint' : 0,
-		'left_arm_6_joint' : 0,
-		'left_arm_7_joint' : 0,
+    'left_arm_1_joint': 0.0,
+    'left_arm_2_joint': 0.0,
+    'left_arm_3_joint': 0.0,
+    'left_arm_4_joint': 0.0,
+    'left_arm_5_joint': 0.0,
+    'left_arm_6_joint': 0.0,
+    'left_arm_7_joint': 0.0,
 }
 ros = True
 try:
-    #lib to working with robo arm
+    # lib to working with robo arm
     # Импортируем необходимые библиотеки
     # библиотека работы с ROS
     import rospy
@@ -93,6 +93,7 @@ try:
     from Rooky.python import Rooky2
 except:
     LOGGER.warning("No Rooky found")
+
 
 @torch.no_grad()
 def run(
@@ -135,9 +136,6 @@ def run(
             node.move_all_joints(1.0)
         else:
             arm = Rooky2.Rooky('/dev/RS_485', 'left')
-
-        flag_can_move = True
-        time_end = -1
 
     flag_can_move = True
     time_end = -1
@@ -230,7 +228,7 @@ def run(
             if webcam_f:  # nr_sources >= 1
                 p, im0, _ = path[i], im0s[i].copy(), dataset.count
                 p = Path(p)  # to Path
-                s += (str(i)+':')
+                s += (str(i) + ':')
                 txt_file_name = p.name
                 save_path = str(save_dir / p.name)  # im.jpg, vid.mp4, ...
             else:
@@ -246,7 +244,6 @@ def run(
                     txt_file_name = p.parent.name  # get folder name containing current img
                     save_path = str(save_dir / p.parent.name)  # im.jpg, vid.mp4, ...
             curr_frames[i] = im0
-
 
             s += '%gx%g ' % im.shape[2:]  # print string
 
@@ -286,7 +283,7 @@ def run(
                             ends.append(bboxes)
                         else:
                             sockets.append(bboxes)
-                        if save_vid  or show_vid:  # Add bbox to image
+                        if save_vid or show_vid:  # Add bbox to image
                             c = int(cls)  # integer class
                             id = int(id)  # integer id
                             label = None if hide_labels else (f'{id} {names[c]}' if hide_conf else \
@@ -294,25 +291,25 @@ def run(
                                                                       f'{id} {conf:.2f}' if hide_class else f'{id} {names[c]} {conf:.2f}'))
                             annotator.box_label(bboxes, label, color=colors(c, True))
 
-
                 LOGGER.info(f'{s}Done. YOLO:({t3 - t2:.3f}s), StrongSORT:({t5 - t4:.3f}s)')
 
             else:
                 strongsort_list[i].increment_ages()
                 LOGGER.info('No detections')
-            #calc dist
+            # calc dist
             left_socket, right_socket, left_end, right_end = None, None, None, None
 
             if len(sockets) > 1:
-                left_socket, right_socket = (sockets[0], sockets[1]) if sockets[0][0] < sockets[1][0] else (sockets[1], sockets[0])
-            elif len(sockets)==1:
-                left_socket = sockets[0] if sockets[0][0] < im0.shape[1]//2 else None
+                left_socket, right_socket = (sockets[0], sockets[1]) if sockets[0][0] < sockets[1][0] else (
+                sockets[1], sockets[0])
+            elif len(sockets) == 1:
+                left_socket = sockets[0] if sockets[0][0] < im0.shape[1] // 2 else None
                 right_socket = sockets[0] if sockets[0][0] > im0.shape[1] // 2 else None
 
             if len(ends) > 1:
                 left_end, right_end = (ends[0], ends[1]) if ends[0][0] < ends[1][0] else (ends[1], ends[0])
-            elif len(ends)==1:
-                left_end = ends[0] if ends[0][0] < im0.shape[1]//2 else None
+            elif len(ends) == 1:
+                left_end = ends[0] if ends[0][0] < im0.shape[1] // 2 else None
                 right_end = ends[0] if ends[0][0] > im0.shape[1] // 2 else None
             h_dist_right, v_dist_right, h_dist_left, v_dist_left = None, None, None, None
             d_l, d_r = 0, 0
@@ -322,11 +319,10 @@ def run(
             if right_socket is not None and right_end is not None:
                 im0, d_r, h_dist_right, v_dist_right = calc_draw_dist(im0, right_socket, right_end, right=True)
 
-
             # # если не нашли руку, то попробуем её поднять
             if not not_move_arm:
                 if flag_can_move:
-                    if len(ends)==0:
+                    if len(ends) == 0:
                         time_end = time.time()
                         print('no arm')
                         if ros:
@@ -336,43 +332,44 @@ def run(
                             arms_joints_dgs['left_arm_4_joint'] = 0.5
                         else:
                             arm.move_joints([
-                            {
-                                'name': 'left_arm_2_joint',
-                                'degree': 70
-                            },
-                            {
-                                'name': 'left_arm_4_joint',
-                                'degree': 30
-                            },
-                                ], 2.5)
+                                {
+                                    'name': 'left_arm_2_joint',
+                                    'degree': 70
+                                },
+                                {
+                                    'name': 'left_arm_4_joint',
+                                    'degree': 30
+                                },
+                            ], 2.5)
                             arms_joints_dgs['left_arm_1_joint'] = 70
                             arms_joints_dgs['left_arm_4_joint'] = 30
 
                         flag_can_move = False
-                        time_end = time_end+1
+                        time_end = time_end + 1
 
                     if h_dist_right:
-                        #move arm little closer
-                        if abs(h_dist_right*d_r)>60:
+                        # move arm little closer
+                        if abs(h_dist_right * d_r) > 60:
                             if ros:
-                                node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint']+0.05, 1)
+                                node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint'] + 0.05, 1)
                             else:
                                 arm.move_joints([
                                     {
                                         'name': 'left_arm_4_joint',
-                                        'degree': arms_joints_dgs['left_arm_4_joint']+5
+                                        'degree': arms_joints_dgs['left_arm_4_joint'] + 5
                                     }], 2)
-                            arms_joints_dgs['left_arm_4_joint']=arms_joints_dgs['left_arm_4_joint']+0.05
+                            arms_joints_dgs['left_arm_4_joint'] = arms_joints_dgs['left_arm_4_joint'] + 0.05
                             flag_can_move = False
                             time_end = time_end + 1
                     if v_dist_right:
-                        if abs(v_dist_right*d_r)>10:
+                        if abs(v_dist_right * d_r) > 10:
                             if ros:
-                                dg = math.atan(v_dist_right/h_dist_right)*2/math.pi
+                                dg = math.atan(v_dist_right / h_dist_right) * 2 / math.pi
                             else:
                                 dg = math.atan(v_dist_right / h_dist_right)
-                            print('left_arm_1_joint'+' '+str(dg)+' '+str(arms_joints_dgs['left_arm_1_joint'] - dg))
-                            node.move_joint('left_arm_1_joint', arms_joints_dgs['left_arm_1_joint']-dg, 1)
+                            print('left_arm_1_joint' + ' ' + str(dg) + ' ' + str(
+                                arms_joints_dgs['left_arm_1_joint'] - dg))
+                            node.move_joint('left_arm_1_joint', arms_joints_dgs['left_arm_1_joint'] - dg, 1)
                             # node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint'] - dg/5, 1)
                             flag_can_move = False
                             time_end = time_end + 1.5
@@ -386,11 +383,11 @@ def run(
                                     }], 2)
 
                     if h_dist_left:
-                        if abs(h_dist_left)*d_r>55:
+                        if abs(h_dist_left) * d_r > 55:
                             flag_can_move = False
                             time_end = time_end + 1
                             if ros:
-                                node.move_joint('left_arm_5_joint', arms_joints_dgs['left_arm_5_joint'] +0.05, 1)
+                                node.move_joint('left_arm_5_joint', arms_joints_dgs['left_arm_5_joint'] + 0.05, 1)
                                 arms_joints_dgs['left_arm_5_joint'] = arms_joints_dgs['left_arm_5_joint'] + 0.05
 
                             else:
@@ -400,12 +397,12 @@ def run(
                                         'degree': arms_joints_dgs['left_arm_5_joint'] - 5
                                     }], 2)
 
-            if time.time()>time_end:
+            if time.time() > time_end:
                 flag_can_move = True
             # Stream results
             im0 = annotator.result()
             if show_vid:
-                im0 = cv2.resize(im0, (im0.shape[1]//5, im0.shape[0]//5))
+                # im0 = cv2.resize(im0, (im0.shape[1] // 5, im0.shape[0] // 5))
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
 
@@ -417,7 +414,7 @@ def run(
                         vid_writer[i].release()  # release previous video writer
                     if vid_cap_f:  # video
                         fps = vid_cap_f.get(cv2.CAP_PROP_FPS)
-                        w = int(vid_cap_f.get(cv2.CAP_PROP_FRAME_WIDTH))*2
+                        w = int(vid_cap_f.get(cv2.CAP_PROP_FRAME_WIDTH)) * 2
                         h = int(vid_cap_f.get(cv2.CAP_PROP_FRAME_HEIGHT))
                     else:  # stream
                         fps, w, h = 30, im0.shape[1], im0.shape[0]
@@ -432,11 +429,10 @@ def run(
     LOGGER.info(
         f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS, %.1fms strong sort update per image at shape {(1, 3, *imgsz)}' % t)
     if save_vid:
-        s =  ''
+        s = ''
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     if update:
         strip_optimizer(yolo_weights)  # update model (to fix SourceChangeWarning)
-
 
 
 def main(opt):

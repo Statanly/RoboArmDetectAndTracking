@@ -4,6 +4,7 @@
 
 matplotlib
 numpy>
+scikit-build
 opencv-python
 Pillow
 PyYAML
@@ -38,7 +39,7 @@ beautifulsoup4
 nose
 comtypes
 setuptools
-
+tensorboard
 # Rooky
 
-serial
+pyserial
