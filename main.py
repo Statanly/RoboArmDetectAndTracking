@@ -44,7 +44,8 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 import logging
 from yolov5.models.common import DetectMultiBackend
-from yolov5.utils.dataloaders import VID_FORMATS, LoadImages
+# from yolov5.utils.dataloaders import VID_FORMATS, LoadImages
+from dataloaders import VID_FORMATS, LoadImages
 from yolov5.utils.general import (LOGGER, check_img_size, non_max_suppression, scale_coords, check_requirements,
                                   check_imshow, xyxy2xywh, increment_path, strip_optimizer, colorstr)
 from yolov5.utils.torch_utils import select_device, time_sync

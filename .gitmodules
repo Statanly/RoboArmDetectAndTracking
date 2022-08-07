@@ -1,3 +1,6 @@
 [submodule "Rooky"]
 	path = Rooky
 	url = https://github.com/Promobot-education/Rooky.git
+[submodule "yolov5"]
+	path = yolov5
+	url = https://github.com/ultralytics/yolov5.git
