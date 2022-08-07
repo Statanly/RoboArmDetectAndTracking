@@ -25,8 +25,8 @@ import cv2
 
 sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 
-from parse_args import parse_opt
-from calculate_dist import calc_draw_dist
+from utils.parse_args import parse_opt
+from utils.utils import calc_draw_dist, found_sockets_ends
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # yolov5 strongsort root directory
@@ -45,7 +45,7 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 import logging
 from yolov5.models.common import DetectMultiBackend
 # from yolov5.utils.dataloaders import VID_FORMATS, LoadImages
-from dataloaders import VID_FORMATS, LoadImages
+from utils.utils import VID_FORMATS, LoadImages
 from yolov5.utils.general import (LOGGER, check_img_size, non_max_suppression, scale_coords, check_requirements,
                                   check_imshow, xyxy2xywh, increment_path, strip_optimizer, colorstr)
 from yolov5.utils.torch_utils import select_device, time_sync
@@ -174,7 +174,7 @@ def run(
 
     # initialize StrongSORT
     cfg = get_config()
-    cfg.merge_from_file(opt.config_strongsort)
+    cfg.merge_from_file(config_strongsort)
 
     # Create as many strong sort instances as there are video sources
     strongsort_list = []
@@ -209,14 +209,14 @@ def run(
         dt[0] += t2 - t1
 
         # Inference
-        visualize = increment_path(save_dir / Path(path[0]).stem, mkdir=True) if opt.visualize else False
-        pred = model(im, augment=opt.augment, visualize=visualize)
+        visualize = increment_path(save_dir / Path(path[0]).stem, mkdir=True) if visualize else False
+        pred = model(im, augment=augment, visualize=visualize)
         t3 = time_sync()
         dt[1] += t3 - t2
 
         # Apply NMS
-        pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, opt.classes, opt.agnostic_nms,
-                                   max_det=opt.max_det)
+        pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms,
+                                   max_det=max_det)
         dt[2] += time_sync() - t3
 
         # Process detections
@@ -298,20 +298,10 @@ def run(
                 strongsort_list[i].increment_ages()
                 LOGGER.info('No detections')
             # calc dist
-            left_socket, right_socket, left_end, right_end = None, None, None, None
+            left_socket, right_socket, left_end, right_end = found_sockets_ends(sockets=sockets, ends=ends,
+                                                                                img_shape=im0.shape)
 
-            if len(sockets) > 1:
-                left_socket, right_socket = (sockets[0], sockets[1]) if sockets[0][0] < sockets[1][0] else (
-                sockets[1], sockets[0])
-            elif len(sockets) == 1:
-                left_socket = sockets[0] if sockets[0][0] < im0.shape[1] // 2 else None
-                right_socket = sockets[0] if sockets[0][0] > im0.shape[1] // 2 else None
 
-            if len(ends) > 1:
-                left_end, right_end = (ends[0], ends[1]) if ends[0][0] < ends[1][0] else (ends[1], ends[0])
-            elif len(ends) == 1:
-                left_end = ends[0] if ends[0][0] < im0.shape[1] // 2 else None
-                right_end = ends[0] if ends[0][0] > im0.shape[1] // 2 else None
             h_dist_right, v_dist_right, h_dist_left, v_dist_left = None, None, None, None
             d_l, d_r = 0, 0
             if left_socket is not None and left_end is not None:
