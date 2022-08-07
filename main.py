@@ -26,7 +26,7 @@ import cv2
 sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 
 from arm_utils.parse_args import parse_opt
-from arm_utils.utils import calc_draw_dist, found_sockets_ends
+from arm_utils.end_socket_utils import calc_draw_dist, found_sockets_ends
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # yolov5 strongsort root directory
@@ -43,6 +43,7 @@ if str(ROOT / 'Rooky' / 'python') not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 import logging
+
 from yolov5.models.common import DetectMultiBackend
 # from yolov5.utils.dataloaders import VID_FORMATS, LoadImages
 from arm_utils.dataloaders import VID_FORMATS, LoadImages
@@ -433,6 +434,6 @@ def main(opt):
 
 if __name__ == "__main__":
     opt = parse_opt()
-    print_args(opt)
+    # print_args(opt)
 
     main(opt)
