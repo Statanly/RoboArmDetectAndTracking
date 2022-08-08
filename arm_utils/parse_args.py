@@ -2,19 +2,8 @@ import argparse
 import sys
 import os
 from pathlib import Path
-FILE = Path(__file__).resolve()
-ROOT = FILE.parents[0]  # yolov5 strongsort root directory
-WEIGHTS = ROOT / 'weights'
 
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))  # add ROOT to PATH
-if str(ROOT / 'yolov5') not in sys.path:
-    sys.path.append(str(ROOT / 'yolov5'))  # add yolov5 ROOT to PATH
-
-ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
-
-
-def parse_opt():
+def parse_opt(ROOT, WEIGHTS):
     parser = argparse.ArgumentParser()
     parser.add_argument('--source-front', type=str, default='0', help='file/dir/URL/glob')
     parser.add_argument('--source-side', type=str, default='0', help='file/dir/URL/glob')
