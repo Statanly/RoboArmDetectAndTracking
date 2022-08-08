@@ -433,7 +433,7 @@ def main(opt):
 
 
 if __name__ == "__main__":
-    opt = parse_opt()
+    opt = parse_opt(ROOT, WEIGHTS)
     # print_args(opt)
 
     main(opt)
