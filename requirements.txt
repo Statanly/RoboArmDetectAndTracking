@@ -2,44 +2,44 @@
 
 # base ----------------------------------------
 
-matplotlib
-numpy>
-scikit-build
-opencv-python
-Pillow
-PyYAML
-requests
-scipy
-torch
-torchvision
-tqdm
+matplotlib~=3.3.4
+numpy~=1.19.5
+scikit-build~=0.15.0
+opencv-contrib-python~=4.6.0.66
+Pillow~=8.4.0
+PyYAML~=6.0
+requests~=2.27.1
+scipy~=1.5.4
+torch~=1.10.1
+torchvision~=0.11.2
+tqdm~=4.64.0
 
 # plotting ------------------------------------
 
-pandas
-seaborn
+pandas~=1.1.5
+seaborn~=0.11.2
 
 # deep_sort -----------------------------------
 
-easydict
+easydict~=1.9
 
 # torchreid
 
-Cython
+Cython~=0.29.32
 h5py
 six
 future
-yacs
-gdown
+yacs~=0.1.8
+gdown~=4.5.1
 flake8
 yapf
 isort
 imageio
-beautifulsoup4
-nose
 comtypes
-setuptools
+setuptools~=59.6.0
 tensorboard
 # Rooky
 
-pyserial
+pyserial~=3.5
+numpy~=1.19.5
+rospkg~=1.4.0
