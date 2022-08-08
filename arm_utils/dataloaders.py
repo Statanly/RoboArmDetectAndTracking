@@ -139,9 +139,9 @@ class LoadImages:
     def new_video(self, path_front, path_side):
         self.frame = 0
         self.cap_front = cv2.VideoCapture(path_front)
-        self.frames_front = int(self.cap_front.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.frames_front = max(int(self.cap_front.get(cv2.CAP_PROP_FRAME_COUNT)), 0) or float('inf')
         self.cap_side = cv2.VideoCapture(path_side)
-        self.frames_side = int(self.cap_front.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.frames_side = max(int(self.cap_side.get(cv2.CAP_PROP_FRAME_COUNT)), 0) or float('inf')
 
     def __len__(self):
         return self.nf  # number of files
