@@ -61,9 +61,7 @@ logging.getLogger().removeHandler(logging.getLogger().handlers[0])
 def check_path(source):
     is_file = Path(source).suffix[1:] in (VID_FORMATS)
     is_url = source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
-    webcam = source.isnumeric() or source.endswith('.txt') or (is_url and not is_file)
-    return is_file, is_url, webcam
-
+    return is_file, is_url
 
 arms_joints_dgs = {
     'left_arm_1_joint': 0.0,
@@ -145,8 +143,6 @@ def run(
     source_front = str(source_front)
     source_side = str(source_side)
 
-    is_url_f, is_file_f, webcam_f = check_path(source_front)
-
     # Directories
     if not isinstance(yolo_weights, list):  # single yolo model
         exp_name = str(yolo_weights).rsplit('/', 1)[-1].split('.')[0]
@@ -227,24 +223,16 @@ def run(
         sockets = []
         for i, det in enumerate(pred):  # detections per image
             seen += 1
-            if webcam_f:  # nr_sources >= 1
-                p, im0, _ = path[i], im0s[i].copy(), dataset.count
-                p = Path(p)  # to Path
-                s += (str(i) + ':')
-                txt_file_name = p.name
+
+            p, im0, _ = path, im0s.copy(), getattr(dataset, 'frame', 0)
+            p = Path(p[0])
+            if source_front.endswith(VID_FORMATS):
+                txt_file_name = p.stem
                 save_path = str(save_dir / p.name)  # im.jpg, vid.mp4, ...
+            # folder with imgs
             else:
-                p, im0, _ = path, im0s.copy(), getattr(dataset, 'frame', 0)
-                p = Path(p[0])
-                # to Path
-                # video file
-                if source_front.endswith(VID_FORMATS):
-                    txt_file_name = p.stem
-                    save_path = str(save_dir / p.name)  # im.jpg, vid.mp4, ...
-                # folder with imgs
-                else:
-                    txt_file_name = p.parent.name  # get folder name containing current img
-                    save_path = str(save_dir / p.parent.name)  # im.jpg, vid.mp4, ...
+                txt_file_name = p.parent.name  # get folder name containing current img
+                save_path = str(save_dir / p.parent.name)  # im.jpg, vid.mp4, ...
             curr_frames[i] = im0
 
             s += '%gx%g ' % im.shape[2:]  # print string
