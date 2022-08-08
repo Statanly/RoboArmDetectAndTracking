@@ -85,9 +85,9 @@ try:
     # Сообщения для описания траектории движения
     from trajectory_msgs.msg import *
 
-    from move_joints import ControlJoints
-except ImportError:
-    LOGGER.warning("No ros lib found.")
+    from arm_utils.move_joints import ControlJoints
+except ImportError as e:
+    LOGGER.warning("No ros lib found.", e)
     ros = False
 try:
     from Rooky.python import Rooky2
@@ -382,7 +382,7 @@ def run(
             # Stream results
             im0 = annotator.result()
             if show_vid:
-                # im0 = cv2.resize(im0, (im0.shape[1] // 5, im0.shape[0] // 5))
+                im0 = cv2.resize(im0, (im0.shape[1] // 5, im0.shape[0] // 5))
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
 
