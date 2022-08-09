@@ -134,8 +134,7 @@ def run(
             # Создадим узел ROS
             node = ControlJoints("left")
 
-            node._positions = [2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            node.move_all_joints(1.0)
+            node.reset_joints()
         else:
             arm = Rooky2.Rooky('/dev/RS_485', 'left')
 
@@ -308,10 +307,8 @@ def run(
                         time_end = time.time()
                         print('no arm', time_no_arm)
                         if ros:
-                            node.move_joint('left_arm_1_joint', 1, 2)
-                            # node.move_joint('left_arm_4_joint', 0.1, 1)
-                            arms_joints_dgs['left_arm_1_joint'] = 1
-                            # arms_joints_dgs['left_arm_4_joint'] = 0.1
+                            node._positions = [1.0, 0.0, 0.0, 0.6, 0.0, 0.5, 0.0]
+                            node.move_all_joints(1.0)
                         else:
                             arm.move_joints([
                                 {
@@ -334,7 +331,12 @@ def run(
                         # move arm little closer
                         if abs(h_dist_right * d_r) > 60:
                             if ros:
-                                node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint'] + 0.05, 1)
+                                node._positions[3]+=0.05
+                                print(
+                                    'h dist right: ' + str(h_dist_right * d_r) +  ' ' + str(node._positions))
+
+                                node.move_all_joints(1.0)
+
                             else:
                                 arm.move_joints([
                                     {
@@ -351,14 +353,13 @@ def run(
                                 dg = math.atan(v_dist_right / h_dist_right) * 2 / math.pi
                             else:
                                 dg = math.atan(v_dist_right / h_dist_right)
-                            print('left_arm_1_joint' + ' ' + str(dg) + ' ' + str(
-                                arms_joints_dgs['left_arm_1_joint'] - dg))
-                            node.move_joint('left_arm_1_joint', arms_joints_dgs['left_arm_1_joint'] - dg, 1)
-                            # node.move_joint('left_arm_4_joint', arms_joints_dgs['left_arm_4_joint'] - dg/5, 1)
+                            print('v dist right: '+str(v_dist_right*d_r )+ ' ' + str(dg) + ' '+ str(node._positions))
+
                             flag_can_move = False
                             time_end = time_end + 1.5
                             if ros:
-                                arms_joints_dgs['left_arm_1_joint'] = arms_joints_dgs['left_arm_1_joint'] - dg
+                                node._positions[0] -= dg
+                                node.move_all_joints(1.0)
                             else:
                                 arm.move_joints([
                                     {
@@ -371,8 +372,10 @@ def run(
                             flag_can_move = False
                             time_end = time_end + 1
                             if ros:
-                                node.move_joint('left_arm_5_joint', arms_joints_dgs['left_arm_5_joint'] + 0.05, 1)
-                                arms_joints_dgs['left_arm_5_joint'] = arms_joints_dgs['left_arm_5_joint'] + 0.05
+                                node._positions[4]=node._positions[4]+0.05
+                                print('h dist left: '+str(h_dist_left*d_r) +  ' '+ str(node._positions))
+
+                                node.move_all_joints(1.0)
 
                             else:
                                 arm.move_joints([
@@ -419,7 +422,7 @@ def run(
                     }], 2)
             break
     if ros:
-        node.move_joint('left_arm_1_joint', 0, 1)
+        node.reset_joints()
     else:
         arm.move_joints([
             {

@@ -104,3 +104,7 @@ class ControlJoints:
         interval_to_point = 2
         self._positions = [0.0, 0.0, 0.0,0.0, 0.0, 0.0, 0.0]
         self.move_all_joints(interval_to_point)
+
+    @property
+    def positions(self):
+        return self._positions
