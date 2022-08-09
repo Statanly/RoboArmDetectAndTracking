@@ -54,6 +54,7 @@ from yolov5.utils.plots import Annotator, colors
 from strong_sort.utils.parser import get_config
 from strong_sort.strong_sort import StrongSORT
 from yolov5.utils.general import print_args
+
 # remove duplicated stream handler to avoid duplicated logging
 logging.getLogger().removeHandler(logging.getLogger().handlers[0])
 
@@ -62,6 +63,7 @@ def check_path(source):
     is_file = Path(source).suffix[1:] in (VID_FORMATS)
     is_url = source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
     return is_file, is_url
+
 
 arms_joints_dgs = {
     'left_arm_1_joint': 0.0,
@@ -139,6 +141,7 @@ def run(
 
     flag_can_move = True
     time_end = -1
+    time_no_arm = 0
 
     source_front = str(source_front)
     source_side = str(source_side)
@@ -290,7 +293,6 @@ def run(
             left_socket, right_socket, left_end, right_end = found_sockets_ends(sockets=sockets, ends=ends,
                                                                                 img_shape=im0.shape)
 
-
             h_dist_right, v_dist_right, h_dist_left, v_dist_left = None, None, None, None
             d_l, d_r = 0, 0
             if left_socket is not None and left_end is not None:
@@ -304,28 +306,29 @@ def run(
                 if flag_can_move:
                     if len(ends) == 0:
                         time_end = time.time()
-                        print('no arm')
+                        print('no arm', time_no_arm)
                         if ros:
-                            node.move_joint('left_arm_1_joint', 0.5, 1)
-                            node.move_joint('left_arm_4_joint', 0.5, 1)
-                            arms_joints_dgs['left_arm_1_joint'] = 0.5
-                            arms_joints_dgs['left_arm_4_joint'] = 0.5
+                            node.move_joint('left_arm_1_joint', 1, 2)
+                            # node.move_joint('left_arm_4_joint', 0.1, 1)
+                            arms_joints_dgs['left_arm_1_joint'] = 1
+                            # arms_joints_dgs['left_arm_4_joint'] = 0.1
                         else:
                             arm.move_joints([
                                 {
-                                    'name': 'left_arm_2_joint',
-                                    'degree': 70
+                                    'name': 'left_arm_1_joint',
+                                    'degree': 75
                                 },
                                 {
                                     'name': 'left_arm_4_joint',
-                                    'degree': 30
+                                    'degree': 25
                                 },
                             ], 2.5)
-                            arms_joints_dgs['left_arm_1_joint'] = 70
-                            arms_joints_dgs['left_arm_4_joint'] = 30
+                            arms_joints_dgs['left_arm_1_joint'] = 75
+                            arms_joints_dgs['left_arm_4_joint'] = 25
 
                         flag_can_move = False
-                        time_end = time_end + 1
+                        time_end = time_end + 2
+                        time_no_arm += 1
 
                     if h_dist_right:
                         # move arm little closer
@@ -341,6 +344,7 @@ def run(
                             arms_joints_dgs['left_arm_4_joint'] = arms_joints_dgs['left_arm_4_joint'] + 0.05
                             flag_can_move = False
                             time_end = time_end + 1
+                            time_no_arm = 0
                     if v_dist_right:
                         if abs(v_dist_right * d_r) > 10:
                             if ros:
@@ -361,7 +365,7 @@ def run(
                                         'name': 'left_arm_1_joint',
                                         'degree': arms_joints_dgs['left_arm_2_joint'] - dg
                                     }], 2)
-
+                            time_no_arm = 0
                     if h_dist_left:
                         if abs(h_dist_left) * d_r > 55:
                             flag_can_move = False
@@ -376,7 +380,7 @@ def run(
                                         'name': 'left_arm_5_joint',
                                         'degree': arms_joints_dgs['left_arm_5_joint'] - 5
                                     }], 2)
-
+                            time_no_arm = 0
             if time.time() > time_end:
                 flag_can_move = True
             # Stream results
@@ -403,7 +407,27 @@ def run(
                 vid_writer[i].write(im0)
 
             prev_frames[i] = curr_frames[i]
+        if time_no_arm > 5:
+            print(time, time_no_arm)
+            if ros:
+                node.move_joint('left_arm_1_joint', 0, 1)
+                arms_joints_dgs['left_arm_5_joint'] = 0
 
+            else:
+                arm.move_joints([
+                    {
+                        'name': 'left_arm_5_joint',
+                        'degree': 0
+                    }], 2)
+            break
+    if ros:
+        node.move_joint('left_arm_1_joint', 0, 1)
+    else:
+        arm.move_joints([
+            {
+                'name': 'left_arm_1_joint',
+                'degree': 0
+            }], 2)
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
     LOGGER.info(
