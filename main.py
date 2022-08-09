@@ -410,9 +410,7 @@ def run(
         if time_no_arm > 5:
             print(time, time_no_arm)
             if ros:
-                node.move_joint('left_arm_1_joint', 0, 1)
-                arms_joints_dgs['left_arm_5_joint'] = 0
-
+                node.reset_joints()
             else:
                 arm.move_joints([
                     {

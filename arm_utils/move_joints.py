@@ -99,3 +99,8 @@ class ControlJoints:
 
         self._cmd_pub.publish(traj)
 
+    def reset_joints(self):
+         # Время движения до указанной точки в секундах
+        interval_to_point = 2
+        self._positions = [0.0, 0.0, 0.0,0.0, 0.0, 0.0, 0.0]
+        self.move_all_joints(interval_to_point)
