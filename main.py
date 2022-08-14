@@ -198,6 +198,9 @@ def run(
     dt, seen = [0.0, 0.0, 0.0, 0.0], 0
     curr_frames, prev_frames = [None] * nr_sources, [None] * nr_sources
     for frame_idx, (path, im, im0s, vid_cap_f, vid_cap_s, s) in enumerate(dataset):
+        key=cv2.waitKey(1) &0xFF
+        if key == ord("q"):
+            break
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
         im = im.half() if half else im.float()  # uint8 to fp16/32
@@ -416,14 +419,15 @@ def run(
                         'degree': 0
                     }], 2)
             break
-    if ros:
-        node.reset_joints()
-    else:
-        arm.move_joints([
-            {
-                'name': 'left_arm_1_joint',
-                'degree': 0
-            }], 2)
+    if not not_move_arm:
+        if ros:
+            node.reset_joints()
+        else:
+            arm.move_joints([
+                {
+                    'name': 'left_arm_1_joint',
+                    'degree': 0
+                }], 2)
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
     LOGGER.info(
