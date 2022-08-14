@@ -308,7 +308,6 @@ def run(
                         print('no arm', time_no_arm)
                         if ros:
                             node._positions = [1.0, 0.0, 0.0, 0.6, 0.0, 0.5, 0.0]
-                            node.move_all_joints(1.0)
                         else:
                             arm.move_joints([
                                 {
@@ -334,16 +333,13 @@ def run(
                                 node._positions[3]+=0.05
                                 print(
                                     'h dist right: ' + str(h_dist_right * d_r) +  ' ' + str(node._positions))
-
-                                node.move_all_joints(1.0)
-
                             else:
                                 arm.move_joints([
                                     {
                                         'name': 'left_arm_4_joint',
                                         'degree': arms_joints_dgs['left_arm_4_joint'] + 5
                                     }], 2)
-                            arms_joints_dgs['left_arm_4_joint'] = arms_joints_dgs['left_arm_4_joint'] + 0.05
+                                arms_joints_dgs['left_arm_4_joint'] = arms_joints_dgs['left_arm_4_joint'] + 0.05
                             flag_can_move = False
                             time_end = time_end + 1
                             time_no_arm = 0
@@ -368,14 +364,12 @@ def run(
                                     }], 2)
                             time_no_arm = 0
                     if h_dist_left:
-                        if abs(h_dist_left) * d_r > 55:
+                        if abs(h_dist_left) * d_r > 60:
                             flag_can_move = False
                             time_end = time_end + 1
                             if ros:
-                                node._positions[4]=node._positions[4]+0.05
+                                node._positions[4]=node._positions[4]-0.05
                                 print('h dist left: '+str(h_dist_left*d_r) +  ' '+ str(node._positions))
-
-                                node.move_all_joints(1.0)
 
                             else:
                                 arm.move_joints([
@@ -384,6 +378,7 @@ def run(
                                         'degree': arms_joints_dgs['left_arm_5_joint'] - 5
                                     }], 2)
                             time_no_arm = 0
+                    node.move_all_joints(1.0)
             if time.time() > time_end:
                 flag_can_move = True
             # Stream results
