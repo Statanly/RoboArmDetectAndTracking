@@ -101,7 +101,7 @@ class ControlJoints:
 
     def reset_joints(self):
          # Время движения до указанной точки в секундах
-        interval_to_point = 2
+        interval_to_point = 3
         self._positions = [0.0, 0.0, 0.0,0.0, 0.0, 0.0, 0.0]
         self.move_all_joints(interval_to_point)
 

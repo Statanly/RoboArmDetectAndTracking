@@ -73,13 +73,16 @@ class LoadImages:
         else:
             raise Exception(f'ERROR: {p_side}  does not exist')
 
-        images_front  = [x for x in files_front if (x.split('.')[-1].lower() in IMG_FORMATS) ]
-        videos_front  = [x for x in files_front if x.split('.')[-1].lower() in VID_FORMATS or (x.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://')))]
-        ni_f, nv_f = len(images_front), len(videos_front)
 
         images_side = [x for x in files_side if x.split('.')[-1].lower() in IMG_FORMATS]
         videos_side = [x for x in files_side if x.split('.')[-1].lower() in VID_FORMATS or (x.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://')))]
         ni_s, nv_s = len(images_side), len(videos_side)
+
+        images_front  = [x for x in files_front if (x.split('.')[-1].lower() in IMG_FORMATS) ]
+        videos_front  = [x for x in files_front if x.split('.')[-1].lower() in VID_FORMATS or (x.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://')))]
+        ni_f, nv_f = len(images_front), len(videos_front)
+
+
         ni = min(ni_s, ni_f)
         nv = min(nv_s, nv_f)
 
@@ -111,6 +114,9 @@ class LoadImages:
             self.mode = 'video'
             ret_val_f, img_f0 = self.cap_front.read()
             ret_val_s, img_s0 = self.cap_side.read()
+
+            # cv2.imshow('front', cv2.resize(img_f0, (img_f0.shape[1]//2, img_s0.shape[0]//2)))
+            # cv2.imshow('side', cv2.resize(img_s0,  (img_s0.shape[1]//2, img_s0.shape[0]//2)))
             if not ret_val_s or not ret_val_f:
                 self.cap_front.release()
                 self.cap_side.release()

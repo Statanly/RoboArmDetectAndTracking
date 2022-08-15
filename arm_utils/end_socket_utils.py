@@ -3,7 +3,11 @@ import cv2
 def calc_draw_dist(im0, socket, end, right=False):
     d_l = 100 / (socket[3] - socket[1])  # mm/px
     s_h, s_v = (int(socket[0] + socket[2])) // 2, int((socket[1] + socket[3])) // 2
-    e_h, e_v = (int(end[0] + end[2])) // 2, (int(end[1] + end[3])) // 2,
+    if right:
+        e_h, e_v = (int(end[0] + end[2])) // 2, (int(end[1] + end[3])) // 2,
+    else:
+        e_v = int(end[1] + end[3] + (end[3]-end[1])//3 ) // 2
+        e_h = int(end[0] + end[2] + (end[2]-end[0])//2) // 2
     h_dist = (s_h - e_h)
     v_dist = (s_v - e_v)
 
