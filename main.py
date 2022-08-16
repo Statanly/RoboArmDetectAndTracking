@@ -89,7 +89,7 @@ try:
 
     from arm_utils.move_joints import ControlJoints
 except ImportError as e:
-    LOGGER.warning("No ros lib found.", e)
+    LOGGER.warning("No ros lib found.")
     ros = False
 try:
     from Rooky.python import Rooky2
@@ -126,7 +126,8 @@ def run(
         hide_class=False,  # hide IDs
         half=False,  # use FP16 half-precision inference
         ros=ros,
-        not_move_arm=False
+        not_move_arm=False,
+        connection_time = 30
 ):
     if not not_move_arm:
         if ros:
@@ -140,6 +141,8 @@ def run(
 
     flag_can_move = True
     flag_arm_down = True
+    flag_to_disconnect = False
+    time_to_disconnect = -1
     time_end = -1
     time_no_arm = 0
 
@@ -198,6 +201,8 @@ def run(
     model.warmup(imgsz=(1 if pt else nr_sources, 3, *imgsz))  # warmup
     dt, seen = [0.0, 0.0, 0.0, 0.0], 0
     curr_frames, prev_frames = [None] * nr_sources, [None] * nr_sources
+
+    time_to_connect = time.time() + connection_time + 3
     for frame_idx, (path, im, im0s, vid_cap_f, vid_cap_s, s) in enumerate(dataset):
         key=cv2.waitKey(1) &0xFF
         if key == ord("q"):
@@ -395,8 +400,24 @@ def run(
                                         'degree': arms_joints_dgs['left_arm_5_joint'] - 5
                                     }], 2)
                             time_no_arm = 0
+                            flag_can_move = False
+
+                    if h_dist_left*d_l<10 and h_dist_right*d_r<55 and v_dist_right*d_r<10:
                         flag_can_move = False
+                        flag_to_disconnect = True
+                        time_to_disconnect = time.time()+10
+
+
                     node.move_all_joints(1.0)
+
+            if flag_to_disconnect:
+                if time.time() > time_to_disconnect:
+                    node._positions[3] -= 10
+                    node.move_all_joints(1.5)
+                    rospy.sleep(1.5)
+                    node.reset_joints()
+                    break
+
             if time.time() > time_end:
                 flag_can_move = True
             # Stream results
@@ -404,7 +425,22 @@ def run(
             if show_vid:
                 im0 = cv2.resize(im0, (im0.shape[1] // 2, im0.shape[0] // 2))
                 cv2.imshow(str(p), im0)
-                cv2.waitKey(1)  # 1 millisecond
+                # cv2.waitKey(1)  # 1 millisecond
+            if time_no_arm > 5:
+                print(time_no_arm)
+                if ros:
+                    node.reset_joints()
+                else:
+                    arm.move_joints([
+                        {
+                            'name': 'left_arm_5_joint',
+                            'degree': 0
+                        }], 2)
+                break
+            if time.time() > time_to_connect:
+                print("Cannot connect in time")
+                node.reset_joints()
+                break
 
             # Save results (image with detections)
             if save_vid:
@@ -420,20 +456,11 @@ def run(
                         fps, w, h = 30, im0.shape[1], im0.shape[0]
                     save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
                     vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+                LOGGER.info(im0.shape)
                 vid_writer[i].write(im0)
 
-            prev_frames[i] = curr_frames[i]
-        if time_no_arm > 5:
-            print(time, time_no_arm)
-            if ros:
-                node.reset_joints()
-            else:
-                arm.move_joints([
-                    {
-                        'name': 'left_arm_5_joint',
-                        'degree': 0
-                    }], 2)
-            break
+        prev_frames[i] = curr_frames[i]
+
     if not not_move_arm:
         if ros:
             node.reset_joints()
