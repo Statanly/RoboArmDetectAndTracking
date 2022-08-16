@@ -401,46 +401,22 @@ def run(
                                     }], 2)
                             time_no_arm = 0
                             flag_can_move = False
-
-                    if h_dist_left*d_l<10 and h_dist_right*d_r<55 and v_dist_right*d_r<10:
-                        flag_can_move = False
-                        flag_to_disconnect = True
-                        time_to_disconnect = time.time()+10
-
+                    if h_dist_left and h_dist_right and v_dist_right:
+                        if h_dist_left*d_l<10 and h_dist_right*d_r<55 and v_dist_right*d_r<10:
+                            flag_can_move = False
+                            flag_to_disconnect = True
+                            time_to_disconnect = time.time()+10
+                            time_end = time.time()+100
 
                     node.move_all_joints(1.0)
 
-            if flag_to_disconnect:
-                if time.time() > time_to_disconnect:
-                    node._positions[3] -= 10
-                    node.move_all_joints(1.5)
-                    rospy.sleep(1.5)
-                    node.reset_joints()
-                    break
-
-            if time.time() > time_end:
-                flag_can_move = True
             # Stream results
             im0 = annotator.result()
             if show_vid:
                 im0 = cv2.resize(im0, (im0.shape[1] // 2, im0.shape[0] // 2))
                 cv2.imshow(str(p), im0)
                 # cv2.waitKey(1)  # 1 millisecond
-            if time_no_arm > 5:
-                print(time_no_arm)
-                if ros:
-                    node.reset_joints()
-                else:
-                    arm.move_joints([
-                        {
-                            'name': 'left_arm_5_joint',
-                            'degree': 0
-                        }], 2)
-                break
-            if time.time() > time_to_connect:
-                print("Cannot connect in time")
-                node.reset_joints()
-                break
+
 
             # Save results (image with detections)
             if save_vid:
@@ -458,7 +434,30 @@ def run(
                     vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                 LOGGER.info(im0.shape)
                 vid_writer[i].write(im0)
+        if flag_to_disconnect:
+            if time.time() > time_to_disconnect:
+                node._positions[3] -= 10
+                node.move_all_joints(1.5)
+                node.reset_joints()
+                break
 
+        if time.time() > time_end:
+            flag_can_move = True
+        if time_no_arm > 60:
+            print(time_no_arm)
+            if ros:
+                node.reset_joints()
+            else:
+                arm.move_joints([
+                    {
+                        'name': 'left_arm_5_joint',
+                        'degree': 0
+                    }], 2)
+            break
+        if time.time() > time_to_connect:
+            print("Cannot connect in time")
+            node.reset_joints()
+            break
         prev_frames[i] = curr_frames[i]
 
     if not not_move_arm:
