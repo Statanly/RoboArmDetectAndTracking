@@ -171,7 +171,7 @@ def run(
     show_vid = check_imshow()
     cudnn.benchmark = True  # set True to speed up constant image size inference
 
-    dataset = LoadImages(source_front, source_side, img_size=imgsz, stride=stride, auto=pt)
+
     nr_sources = 1
     vid_path, vid_writer, txt_path = [None] * nr_sources, [None] * nr_sources, [None] * nr_sources
 
@@ -202,7 +202,10 @@ def run(
     dt, seen = [0.0, 0.0, 0.0, 0.0], 0
     curr_frames, prev_frames = [None] * nr_sources, [None] * nr_sources
 
-    time_to_connect = time.time() + connection_time + 3
+    time_to_connect = time.time() + int(connection_time) + 3
+    print(time_to_connect)
+    d_v, d_h = 0.03, 0.03
+    dataset = LoadImages(source_front, source_side, img_size=imgsz, stride=stride, auto=pt)
     for frame_idx, (path, im, im0s, vid_cap_f, vid_cap_s, s) in enumerate(dataset):
         key=cv2.waitKey(1) &0xFF
         if key == ord("q"):
@@ -344,12 +347,12 @@ def run(
                         if abs(h_dist_right * d_r) > 60:
                             if ros:
                                 time_end = time_end + 1.5
-                                if abs(v_dist_right * d_r) > 10:
-                                    node._positions[0] += 0.02
-                                    node._positions[3]-=0.01
+                                if abs(v_dist_right * d_r) > 20:
+                                    node._positions[0] += 0.01
+                                    node._positions[3]-=0.02
                                 else:
                                     node._positions[0] += 0.01
-                                    node._positions[3] -= 0.004
+                                    node._positions[3] -= 0.01
                                 print(
                                     'h dist right: ' + str(h_dist_right * d_r) +  ' ' + str(node._positions))
                             else:
@@ -368,7 +371,6 @@ def run(
                                 else:
                                     dg = math.atan(v_dist_right / h_dist_right)
                                 print('v dist right: '+str(v_dist_right*d_r )+ ' ' + str(dg) + ' '+ str(node._positions))
-
                                 if flag_can_move:
                                     time_end = time_end + 1.5
                                 if ros:
@@ -388,9 +390,10 @@ def run(
                                 if flag_can_move:
                                     time_end = time_end + 1.5
                                 if h_dist_left>0:
-                                    node._positions[1] = node._positions[1] - 0.03
+                                    node._positions[1] = node._positions[1] - d_h
                                 else:
-                                    node._positions[1] = node._positions[1] + 0.03
+                                    node._positions[1] = node._positions[1] + d_h
+                                d_h-=0.005
 
                                 print('h dist left: '+str(h_dist_left*d_r) +  ' '+ str(node._positions))
                             else:
@@ -402,7 +405,7 @@ def run(
                             time_no_arm = 0
                             flag_can_move = False
                     if h_dist_left and h_dist_right and v_dist_right:
-                        if h_dist_left*d_l<10 and h_dist_right*d_r<55 and v_dist_right*d_r<10:
+                        if h_dist_left*d_l<10 and h_dist_right*d_r<60 and v_dist_right*d_r<10:
                             flag_can_move = False
                             flag_to_disconnect = True
                             time_to_disconnect = time.time()+10
@@ -413,7 +416,7 @@ def run(
             # Stream results
             im0 = annotator.result()
             if show_vid:
-                im0 = cv2.resize(im0, (im0.shape[1] // 2, im0.shape[0] // 2))
+                im0 = cv2.resize(im0, (im0.shape[1] // 5, im0.shape[0] // 5))
                 cv2.imshow(str(p), im0)
                 # cv2.waitKey(1)  # 1 millisecond
 
@@ -434,30 +437,32 @@ def run(
                     vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                 LOGGER.info(im0.shape)
                 vid_writer[i].write(im0)
-        if flag_to_disconnect:
-            if time.time() > time_to_disconnect:
-                node._positions[3] -= 10
-                node.move_all_joints(1.5)
+        if not not_move_arm:
+            if flag_to_disconnect:
+                if \
+                        time.time() > time_to_disconnect:
+                    node._positions[3] -= 10
+                    node.move_all_joints(1.5)
+                    node.reset_joints()
+                    break
+
+            if time.time() > time_end:
+                flag_can_move = True
+            if time_no_arm > 5:
+                print(time_no_arm)
+                if ros:
+                    node.reset_joints()
+                else:
+                    arm.move_joints([
+                        {
+                            'name': 'left_arm_5_joint',
+                            'degree': 0
+                        }], 2)
+                break
+            if time.time() > time_to_connect:
+                print("Cannot connect in time")
                 node.reset_joints()
                 break
-
-        if time.time() > time_end:
-            flag_can_move = True
-        if time_no_arm > 60:
-            print(time_no_arm)
-            if ros:
-                node.reset_joints()
-            else:
-                arm.move_joints([
-                    {
-                        'name': 'left_arm_5_joint',
-                        'degree': 0
-                    }], 2)
-            break
-        if time.time() > time_to_connect:
-            print("Cannot connect in time")
-            node.reset_joints()
-            break
         prev_frames[i] = curr_frames[i]
 
     if not not_move_arm:
@@ -473,6 +478,7 @@ def run(
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
     LOGGER.info(
         f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS, %.1fms strong sort update per image at shape {(1, 3, *imgsz)}' % t)
+    print(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS, %.1fms strong sort update per image at shape {(1, 3, *imgsz)}' % t)
     if save_vid:
         s = ''
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")

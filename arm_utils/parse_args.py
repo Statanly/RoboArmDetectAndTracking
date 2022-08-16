@@ -35,7 +35,7 @@ def parse_opt(ROOT, WEIGHTS):
     parser.add_argument('--hide-class', default=False, action='store_true', help='hide IDs')
     parser.add_argument('--ros', default=False, action='store_true', help='using ros or direct control')
     parser.add_argument('--not-move-arm', default=False, action='store_true', help='move arm or just visualize')
-    parser.add_argument('--connection-time', default=30, action='store_true', help='time to trying to connect')
+    parser.add_argument('--connection-time', default=30, help='time to trying to connect')
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     return opt

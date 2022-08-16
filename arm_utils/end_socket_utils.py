@@ -17,10 +17,10 @@ def calc_draw_dist(im0, socket, end, right=False):
     pos = 50
     if right:
         pos=pos + im0.shape[1]//2
-    cv2.putText(im0, str(h_dist * d_l), color=(0, 255, 0), fontScale=1.5, thickness=3,
+    cv2.putText(im0, str(h_dist * d_l), color=(0, 255, 0), fontScale=1, thickness=3,
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                 org=(pos, 200))
-    cv2.putText(im0, str(v_dist * d_l), color=(0, 255, 0), fontScale=1.5, thickness=3,
+    cv2.putText(im0, str(v_dist * d_l), color=(0, 255, 0), fontScale=1, thickness=3,
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                 org=(pos, 250))
     return im0, d_l, h_dist, v_dist
