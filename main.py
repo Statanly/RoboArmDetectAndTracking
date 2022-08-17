@@ -202,15 +202,17 @@ def run(
     dt, seen = [0.0, 0.0, 0.0, 0.0], 0
     curr_frames, prev_frames = [None] * nr_sources, [None] * nr_sources
 
-    time_to_connect = time.time() + int(connection_time) + 3
-    print(time_to_connect)
-    d_v, d_h = 0.03, 0.03
+
+
+    d_v, d_h = 0.03, 0.05
     dataset = LoadImages(source_front, source_side, img_size=imgsz, stride=stride, auto=pt)
+    time_to_connect = time.time() + int(connection_time) + 3
+    print(time.time(), time_to_connect)
     for frame_idx, (path, im, im0s, vid_cap_f, vid_cap_s, s) in enumerate(dataset):
         key=cv2.waitKey(1) &0xFF
         if key == ord("q"):
             break
-        if frame_idx%2 or frame_idx%3:
+        if frame_idx%2:
             continue
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
@@ -296,7 +298,7 @@ def run(
                                                                   (
                                                                       f'{id} {conf:.2f}' if hide_class else f'{id} {names[c]} {conf:.2f}'))
                             annotator.box_label(bboxes, label, color=colors(c, True))
-
+                #print(f'{s}Done. YOLO:({t3 - t2:.3f}s), StrongSORT:({t5 - t4:.3f}s)')
                 LOGGER.info(f'{s}Done. YOLO:({t3 - t2:.3f}s), StrongSORT:({t5 - t4:.3f}s)')
 
             else:
@@ -317,11 +319,10 @@ def run(
             # # если не нашли руку, то попробуем её поднять
             if not not_move_arm:
                 if flag_can_move:
+                    time_end = time.time()
                     if len(ends) == 0:
-                        time_end = time.time()
                         print('no arm', time_no_arm)
                         if ros:
-                            time_end = time_end + 1.5
                             node._positions = [1.1, 0.0, 0.0, 0.6, 0.0, -0.15, 0.0]
                         else:
                             arm.move_joints([
@@ -337,21 +338,43 @@ def run(
                             arms_joints_dgs['left_arm_1_joint'] = 75
                             arms_joints_dgs['left_arm_4_joint'] = 25
                         if flag_can_move:
-                            time_end = time_end + 3
+                            time_end = time_end + 4
                         flag_can_move = False
 
                         time_no_arm += 1
-                    #
+
+                    if flag_arm_down or v_dist_right is not None and abs(v_dist_right)>100:
+                        if v_dist_right:
+                            if abs(v_dist_right * d_r) > 12:
+                                if ros:
+                                    dg = math.atan(v_dist_right / h_dist_right) / math.pi / 2.5
+                                else:
+                                    dg = math.atan(v_dist_right / h_dist_right)
+                                print('v dist right: '+str(v_dist_right*d_r )+ ' ' + str(dg) + ' '+ str(node._positions))
+                                if flag_can_move:
+                                    time_end = time_end + 3
+                                if ros:
+                                    node._positions[0] -= dg
+                                else:
+                                    arm.move_joints([
+                                        {
+                                            'name': 'left_arm_1_joint',
+                                            'degree': arms_joints_dgs['left_arm_2_joint'] - dg
+                                        }], 2)
+                                time_no_arm = 0
+                                flag_can_move = False
+                                flag_arm_down = False
+
                     if h_dist_right:
                         # move arm little closer
-                        if abs(h_dist_right * d_r) > 60:
+                        if abs(h_dist_right * d_r) > 55 and abs(v_dist_right) < 15:
                             if ros:
-                                time_end = time_end + 1.5
+                                time_end = time_end + 3
                                 if abs(v_dist_right * d_r) > 20:
                                     node._positions[0] += 0.01
                                     node._positions[3]-=0.02
                                 else:
-                                    node._positions[0] += 0.01
+                                    node._positions[0] += 0.005
                                     node._positions[3] -= 0.01
                                 print(
                                     'h dist right: ' + str(h_dist_right * d_r) +  ' ' + str(node._positions))
@@ -363,39 +386,35 @@ def run(
                                     }], 2)
                                 arms_joints_dgs['left_arm_4_joint'] = arms_joints_dgs['left_arm_4_joint'] + 0.05
                             time_no_arm = 0
-                    if flag_arm_down or v_dist_right is not None and abs(v_dist_right)>60:
-                        if v_dist_right:
-                            if abs(v_dist_right * d_r) > 12:
-                                if ros:
-                                    dg = math.atan(v_dist_right / h_dist_right) / math.pi / 2.5
-                                else:
-                                    dg = math.atan(v_dist_right / h_dist_right)
-                                print('v dist right: '+str(v_dist_right*d_r )+ ' ' + str(dg) + ' '+ str(node._positions))
-                                if flag_can_move:
-                                    time_end = time_end + 1.5
-                                if ros:
-                                    node._positions[0] -= dg
-                                    node.move_all_joints(1.0)
-                                else:
-                                    arm.move_joints([
-                                        {
-                                            'name': 'left_arm_1_joint',
-                                            'degree': arms_joints_dgs['left_arm_2_joint'] - dg
-                                        }], 2)
-                                time_no_arm = 0
-                            flag_arm_down = False
+                            flag_can_move = False
+                        # elif abs(h_dist_right * d_r) > 55 and 20<abs(v_dist_right) < 40:
+                        #     if ros:
+                        #         time_end = time_end + 2
+                        #         if v_dist_right * d_r>0:
+                        #             node._positions[0] += 0.005
+                        #         else:
+                        #             node._positions[0] -= 0.005
+                        #     time_no_arm = 0
+                        #     flag_can_move = False
+
                     if h_dist_left:
                         if abs(h_dist_left) * d_r > 5:
                             if ros:
                                 if flag_can_move:
-                                    time_end = time_end + 1.5
-                                if h_dist_left>0:
-                                    node._positions[1] = node._positions[1] - d_h
-                                else:
-                                    node._positions[1] = node._positions[1] + d_h
-                                d_h-=0.005
+                                    time_end = time_end + 3
 
-                                print('h dist left: '+str(h_dist_left*d_r) +  ' '+ str(node._positions))
+                                if h_dist_left>10:
+                                    d = 0.1
+                                else:
+                                    d = 0.02
+
+                                if h_dist_left>0:
+                                    node._positions[1] = node._positions[1] - d
+                                else:
+                                    node._positions[1] = node._positions[1] + d
+
+
+                                print('h dist left: '+str(h_dist_left*d_r) +' '+ str(d_h)+ ' '+ str(node._positions))
                             else:
                                 arm.move_joints([
                                     {
@@ -404,19 +423,20 @@ def run(
                                     }], 2)
                             time_no_arm = 0
                             flag_can_move = False
+                    print('move all',time.time(), time_end, node._positions)
+                    node.move_all_joints(1.0)
+
                     if h_dist_left and h_dist_right and v_dist_right:
-                        if h_dist_left*d_l<10 and h_dist_right*d_r<60 and v_dist_right*d_r<10:
+                        if abs(h_dist_left)*d_l<10 and abs(h_dist_right)*d_r<60 and abs(v_dist_right)*d_r<10:
                             flag_can_move = False
                             flag_to_disconnect = True
                             time_to_disconnect = time.time()+10
                             time_end = time.time()+100
 
-                    node.move_all_joints(1.0)
-
             # Stream results
             im0 = annotator.result()
             if show_vid:
-                im0 = cv2.resize(im0, (im0.shape[1] // 5, im0.shape[0] // 5))
+                im0 = cv2.resize(im0, (im0.shape[1] // 3, im0.shape[0] // 3))
                 cv2.imshow(str(p), im0)
                 # cv2.waitKey(1)  # 1 millisecond
 
@@ -441,8 +461,10 @@ def run(
             if flag_to_disconnect:
                 if \
                         time.time() > time_to_disconnect:
-                    node._positions[3] -= 10
+                    print("Disconnectd after connection")
+                    node._positions[3] += 10
                     node.move_all_joints(1.5)
+                    rospy.sleep(2)
                     node.reset_joints()
                     break
 
