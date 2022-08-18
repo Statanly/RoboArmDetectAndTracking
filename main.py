@@ -414,7 +414,7 @@ def run(
             # Stream results
             im0 = annotator.result()
             if show_vid:
-                im0 = cv2.resize(im0, (im0.shape[1] // 3, im0.shape[0] // 3))
+                im0 = cv2.resize(im0, (im0.shape[1] // 5, im0.shape[0] // 5))
                 cv2.imshow(str(p), im0)
                 # cv2.waitKey(1)  # 1 millisecond
 
@@ -451,14 +451,8 @@ def run(
                 flag_can_move = True
             if time_no_arm > 5:
                 print(time_no_arm)
-                if ros:
-                    node.reset_joints()
-                else:
-                    arm.move_joints([
-                        {
-                            'name': 'left_arm_5_joint',
-                            'degree': 0
-                        }], 2)
+                node.reset_joints()
+
                 break
             if time.time() > time_to_connect:
                 print("Cannot connect in time")
