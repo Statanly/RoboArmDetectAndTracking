@@ -125,7 +125,6 @@ def run(
         hide_conf=False,  # hide confidences
         hide_class=False,  # hide IDs
         half=False,  # use FP16 half-precision inference
-        ros=ros,
         not_move_arm=False,
         connection_time = 30
 ):
@@ -202,8 +201,6 @@ def run(
     model.warmup(imgsz=(1 if pt else nr_sources, 3, *imgsz))  # warmup
     dt, seen = [0.0, 0.0, 0.0, 0.0], 0
     curr_frames, prev_frames = [None] * nr_sources, [None] * nr_sources
-
-
 
     d_v, d_h = 0.03, 0.05
     dataset = LoadImages(source_front, source_side, img_size=imgsz, stride=stride, auto=pt)
@@ -323,21 +320,8 @@ def run(
                     time_end = time.time()
                     if len(ends) == 0:
                         print('no arm', time_no_arm)
-                        if ros:
-                            node._positions = [1.1, 0.0, 0.0, 0.6, 0.0, -0.15, 0.0]
-                        else:
-                            arm.move_joints([
-                                {
-                                    'name': 'left_arm_1_joint',
-                                    'degree': 75
-                                },
-                                {
-                                    'name': 'left_arm_4_joint',
-                                    'degree': 25
-                                },
-                            ], 2.5)
-                            arms_joints_dgs['left_arm_1_joint'] = 75
-                            arms_joints_dgs['left_arm_4_joint'] = 25
+                        node._positions = [1.1, 0.0, 0.0, 1.0, 0.0, -0.15, 0.0]
+
                         if flag_can_move:
                             time_end = time_end + 2.5
                         flag_can_move = False
@@ -347,21 +331,13 @@ def run(
                     if flag_arm_down or v_dist_right is not None and abs(v_dist_right)>100:
                         if v_dist_right:
                             if abs(v_dist_right * d_r) > 12:
-                                if ros:
-                                    dg = math.atan(v_dist_right / h_dist_right) / math.pi / 2.5
-                                else:
-                                    dg = math.atan(v_dist_right / h_dist_right)
-                                print('v dist right: '+str(v_dist_right*d_r )+ ' ' + str(dg) + ' '+ str(node._positions))
                                 if flag_can_move:
                                     time_end = time_end + 2.5
-                                if ros:
-                                    node._positions[0] -= dg
-                                else:
-                                    arm.move_joints([
-                                        {
-                                            'name': 'left_arm_1_joint',
-                                            'degree': arms_joints_dgs['left_arm_2_joint'] - dg
-                                        }], 2)
+
+                                dg = math.atan(v_dist_right / h_dist_right) / math.pi / 2.5
+                                node._positions[0] -= dg
+                                print('v dist right: '+str(v_dist_right*d_r )+ ' ' + str(dg) + ' '+ str(node._positions))
+
                                 time_no_arm = 0
                                 flag_can_move = False
                                 flag_arm_down = False
@@ -369,80 +345,55 @@ def run(
                     if h_dist_right:
                         # move arm little closer
                         if abs(h_dist_right * d_r) > 53 and abs(v_dist_right) < 10:
-                            if ros:
-                                if flag_can_move:
-                                    time_end = time_end + 2.5
+                            if flag_can_move:
+                                time_end = time_end + 2.5
 
-                                if h_dist_right * d_r > 70:
-                                    node._positions[0] += 0.2
-                                    node._positions[3]-= 0.25
-                                elif v_dist_right * d_r > 5:
-                                    node._positions[0] += 0.010
-                                    node._positions[3]-= 0.015
-                                elif h_dist_right>53:
-                                    node._positions[0] += 0.03
-                                    node._positions[3] -= 0.04
+                            if v_dist_right * d_r > 5:
+                                node._positions[0] += 0.010
+                            elif v_dist_right * d_r < -5:
+                                node._positions[0] -= 0.010
+
+                            if h_dist_right * d_r > 70:
+                                node._positions[0] += 0.2
+                                node._positions[3]-= 0.25
+
+                            elif h_dist_right * d_r>53:
+                                node._positions[0] += 0.03
+                                node._positions[3] -= 0.04
 
                                 print(
                                     'h dist right: ' + str(h_dist_right * d_r) +  ' ' + str(node._positions))
-                            else:
-                                arm.move_joints([
-                                    {
-                                        'name': 'left_arm_4_joint',
-                                        'degree': arms_joints_dgs['left_arm_4_joint'] + 5
-                                    }], 2)
-                                arms_joints_dgs['left_arm_4_joint'] = arms_joints_dgs['left_arm_4_joint'] + 0.05
                             time_no_arm = 0
                             flag_can_move = False
                         elif h_dist_right < 47:
                             node._positions[3] += 0.5
-                        elif abs(h_dist_right * d_r) > 70 and 10<abs(v_dist_right) < 120:
-                            if ros:
-                                if flag_can_move:
-                                    time_end = time_end + 2
-                                if v_dist_right > 0:
-                                    node._positions[0] -= 0.01
-                                else:
-                                    node._positions[0] += 0.01
-                            time_no_arm = 0
-                            flag_can_move = False
-                            print(
-                                'h dist right up: ' + str(h_dist_right * d_r) + ' ' + str(node._positions))
 
                     if h_dist_left:
                         if abs(h_dist_left) * d_r > 20 and flag_arm_side:
-                            if ros:
-                                if flag_can_move:
-                                    time_end = time_end + 2
+                            if flag_can_move:
+                                time_end = time_end + 2
 
-                                d = math.atan(v_dist_left / h_dist_right) / math.pi / 2
+                            d = math.atan(v_dist_left / h_dist_right) / math.pi / 2
+                            flag_arm_side = False
 
-                                flag_arm_side = False
+                            if h_dist_left>0:
+                                node._positions[1] = node._positions[1] + d
+                            else:
+                                node._positions[1] = node._positions[1] - d
 
-                                # if h_dist_left>10:
-                                #     d = 0.2
-                                # else:
-                                #     d = 0.03
-                                #
-                                if h_dist_left>0:
-                                    node._positions[1] = node._positions[1] + d - 0.01
-                                else:
-                                    node._positions[1] = node._positions[1] - d + 0.01
+                        elif abs(h_dist_left) * d_r > 10:
+                            if flag_can_move:
+                                time_end = time_end + 2
 
-                        elif abs(h_dist_left) * d_r > 20:
-                            if ros:
-                                if flag_can_move:
-                                    time_end = time_end + 2
+                            if h_dist_left>10:
+                                d = 0.2
+                            else:
+                                d = 0.03
 
-                                if h_dist_left>10:
-                                    d = 0.2
-                                else:
-                                    d = 0.03
-
-                                if h_dist_left > 0:
-                                    node._positions[1] = node._positions[1] - d
-                                else:
-                                    node._positions[1] = node._positions[1] + d
+                            if h_dist_left > 0:
+                                node._positions[1] = node._positions[1] - d
+                            else:
+                                node._positions[1] = node._positions[1] + d
 
                                 print('h dist left: '+str(h_dist_left*d_r) +' '+ str(d_h)+ ' '+ str(node._positions))
                             time_no_arm = 0

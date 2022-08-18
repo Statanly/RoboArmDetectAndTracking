@@ -33,7 +33,6 @@ def parse_opt(ROOT, WEIGHTS):
     parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
     parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
     parser.add_argument('--hide-class', default=False, action='store_true', help='hide IDs')
-    parser.add_argument('--ros', default=False, action='store_true', help='using ros or direct control')
     parser.add_argument('--not-move-arm', default=False, action='store_true', help='move arm or just visualize')
     parser.add_argument('--connection-time', default=30, help='time to trying to connect')
     opt = parser.parse_args()
