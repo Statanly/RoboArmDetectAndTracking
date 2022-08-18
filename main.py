@@ -366,7 +366,10 @@ def run(
                             time_no_arm = 0
                             flag_can_move = False
                         elif h_dist_right < 47:
+                            if flag_can_move:
+                                time_end = time_end + 2
                             node._positions[3] += 0.5
+                            flag_can_move = False
 
                     if h_dist_left:
                         if abs(h_dist_left) * d_r > 20 and flag_arm_side:
