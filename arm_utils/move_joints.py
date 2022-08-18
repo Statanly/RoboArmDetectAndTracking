@@ -102,7 +102,11 @@ class ControlJoints:
     def reset_joints(self):
          # Время движения до указанной точки в секундах
         interval_to_point = 3
-        self._positions = [0.0, 0.0, 0.0,0.0, 0.0, 0.0, 0.0]
+        self._positions[3] = 0.5
+        self._positions[0] = 0.3
+        self.move_all_joints(1)
+        rospy.sleep(0.5)
+        self._positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.move_all_joints(interval_to_point)
 
     @property
