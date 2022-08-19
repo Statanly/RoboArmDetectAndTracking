@@ -320,7 +320,7 @@ def run(
                     time_end = time.time()
                     if len(ends) == 0:
                         print('no arm', time_no_arm)
-                        node._positions = [1.1, 0.0, 0.0, 1.0, 0.0, -0.15, 0.0]
+                        node._positions = [1.0, 0.0, 0.0, 0.8, 0.0, -0.15, 0.0]
 
                         if flag_can_move:
                             time_end = time_end + 2.5
@@ -344,22 +344,22 @@ def run(
 
                     if h_dist_right:
                         # move arm little closer
-                        if abs(h_dist_right * d_r) > 53 and abs(v_dist_right) < 10:
+                        if abs(h_dist_right * d_r) > 53 and abs(v_dist_right) < 30 and h_dist_left and abs(h_dist_left)<30:
                             if flag_can_move:
                                 time_end = time_end + 2.5
 
-                            if v_dist_right * d_r > 5:
-                                node._positions[0] += 0.010
-                            elif v_dist_right * d_r < -5:
-                                node._positions[0] -= 0.010
+                            # if v_dist_right * d_r > 5:
+                            #     node._positions[3] -= 0.005
+                            # elif v_dist_right * d_r < -5:
+                            #     node._positions[3] += 0.005
 
-                            if h_dist_right * d_r > 70:
+                            if h_dist_right * d_r > 75:
                                 node._positions[0] += 0.2
                                 node._positions[3]-= 0.25
 
-                            elif h_dist_right * d_r>53:
-                                node._positions[0] += 0.03
-                                node._positions[3] -= 0.04
+                            elif h_dist_right * d_r>60:
+                                node._positions[0] += 0.02
+                                node._positions[3] -= 0.03
 
                                 print(
                                     'h dist right: ' + str(h_dist_right * d_r) +  ' ' + str(node._positions))
@@ -372,24 +372,24 @@ def run(
                             flag_can_move = False
 
                     if h_dist_left:
-                        if abs(h_dist_left) * d_r > 20 and flag_arm_side:
+                        if abs(h_dist_left) * d_r > 30 and flag_arm_side:
                             if flag_can_move:
                                 time_end = time_end + 2
 
-                            d = math.atan(v_dist_left / h_dist_right) / math.pi / 2
+                            d = math.atan(h_dist_left / v_dist_right) / math.pi / 2
                             flag_arm_side = False
 
                             if h_dist_left>0:
-                                node._positions[1] = node._positions[1] + d
+                                node._positions[1] = node._positions[1] + d - 0.15
                             else:
-                                node._positions[1] = node._positions[1] - d
+                                node._positions[1] = node._positions[1] - d + 0.15
 
                         elif abs(h_dist_left) * d_r > 10:
                             if flag_can_move:
                                 time_end = time_end + 2
 
-                            if h_dist_left>10:
-                                d = 0.2
+                            if h_dist_left>15:
+                                d = 0.1
                             else:
                                 d = 0.03
 
@@ -406,6 +406,7 @@ def run(
 
                     if h_dist_left and h_dist_right and v_dist_right:
                         if abs(h_dist_left)*d_l<15 and abs(h_dist_right)*d_r<50 and abs(v_dist_right)*d_r<10:
+                            print("Seems like connected")
                             flag_can_move = False
                             flag_to_disconnect = True
                             time_to_disconnect = time.time()+10
