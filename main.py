@@ -238,7 +238,6 @@ def run(
         ends = []
         sockets = []
         for i, det in enumerate(pred):  # detections per image
-            print(i)
             seen += 1
 
             p, im0, _ = path, im0s.copy(), getattr(dataset, 'frame', 0)
