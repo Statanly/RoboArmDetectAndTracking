@@ -382,23 +382,61 @@ def run(
 
                 q1 = 1.0 + math.acos(x/B)/math.pi*2 - math.acos(v)/math.pi*2
                 v = (256.1**2 + (249.1+89+85)**2 - B**2) / (2*256.1*(249.1+89+85))
-                print("x y v ", str(x), str(y), str(v))
+                q2 = (math.pi - math.acos(v))/math.pi * 2
 
-                q2 = math.pi - math.acos(v)
-
+                q3 = -math.atan(ds/y)
+                if q3<0:
+                    print("Move arm more to the right.")
+                    break;
                 node._positions[0] = q1
                 node._positions[3] = q2
+                node._positions[1] = q3
 
-            print('move all',time.time(), time_end, node._positions)
-            node.move_all_joints(1.0)
+                print('move all',time.time(), time_end, node._positions)
+                flag_arm_down = False
+                node.move_all_joints(1.0)
+            else:
+                if h_dist_left and abs(h_dist_left * d_r) > 10:
+                    if flag_can_move:
+                        time_end = time_end + 2
 
-            if h_dist_left and h_dist_right and v_dist_right:
-                if abs(h_dist_left*d_l-10)<15 and abs(h_dist_right)*d_r<60 and abs(v_dist_right*d_r)<10:
-                    print("Seems like connected")
-                    flag_can_move = False
-                    flag_to_disconnect = True
-                    time_to_disconnect = time.time()+10
-                    time_end = time.time()+100
+                    if h_dist_left > 15:
+                        d = 0.1
+                    else:
+                        d = 0.03
+
+                    if h_dist_left > 0:
+                        node._positions[1] = node._positions[1] - d
+                    else:
+                        node._positions[1] = node._positions[1] + d
+
+                if h_dist_right:
+                    # move arm little closer
+                    if abs(h_dist_right * d_r) > 55 and abs(v_dist_right) < 40:
+                        if flag_can_move:
+                            time_end = time_end + 2.5
+
+                        if node._positions[3] < 0:
+                            print(node._positions)
+                            print("Arm is located too far. Please move it closer.")
+                            break
+                        if h_dist_right * d_r > 75:
+                            node._positions[0] += 0.15
+                            node._positions[3] -= 0.25
+
+                        elif h_dist_right * d_r > 55:
+                            node._positions[0] += 0.01
+                            node._positions[3] -= 0.03
+                print('move all', time.time(), time_end, node._positions)
+                node.move_all_joints(1.0)
+
+        if h_dist_left and h_dist_right and v_dist_right:
+            if abs(h_dist_left*d_l-10)<15 and abs(h_dist_right)*d_r<60 and abs(v_dist_right*d_r)<10:
+                print("Seems like connected")
+                flag_can_move = False
+                flag_to_disconnect = True
+                time_to_disconnect = time.time()+10
+                time_end = time.time()+100
 
             # Stream results
         im0 = annotator.result()
