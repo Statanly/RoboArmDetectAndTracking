@@ -129,18 +129,18 @@ def run(
         connection_time = 30
 ):
     if not not_move_arm:
-        if ros:
-            rospy.init_node('joint_control_sim_test')
-            # Создадим узел ROS
-            node = ControlJoints("left")
+        rospy.init_node('joint_control_sim_test')
+        # Создадим узел ROS
+        node = ControlJoints("left")
 
             # node.reset_joints()
-        else:
-            arm = Rooky2.Rooky('/dev/RS_485', 'left')
 
     flag_can_move = True
     flag_arm_down = True
     flag_arm_side = True
+    x, y = 0, 0
+
+
     flag_to_disconnect = False
     time_to_disconnect = -1
     time_end = -1
@@ -202,7 +202,6 @@ def run(
     dt, seen = [0.0, 0.0, 0.0, 0.0], 0
     curr_frames, prev_frames = [None] * nr_sources, [None] * nr_sources
 
-    d_v, d_h = 0.03, 0.05
     dataset = LoadImages(source_front, source_side, img_size=imgsz, stride=stride, auto=pt)
     time_to_connect = time.time() + int(connection_time) + 3
     print(time.time(), time_to_connect)
@@ -243,11 +242,9 @@ def run(
             p, im0, _ = path, im0s.copy(), getattr(dataset, 'frame', 0)
             p = Path(p[0])
             if source_front.endswith(VID_FORMATS):
-                txt_file_name = p.stem
                 save_path = str(save_dir / p.name)  # im.jpg, vid.mp4, ...
             # folder with imgs
             else:
-                txt_file_name = p.parent.name  # get folder name containing current img
                 save_path = str(save_dir / p.parent.name)  # im.jpg, vid.mp4, ...
             curr_frames[i] = im0
 
@@ -302,7 +299,10 @@ def run(
             else:
                 strongsort_list[i].increment_ages()
                 LOGGER.info('No detections')
-        # calc dist
+
+        '''
+        Found distances between sockets and ends.
+        '''
         left_socket, right_socket, left_end, right_end = found_sockets_ends(sockets=sockets, ends=ends,
                                                                             img_shape=im0.shape)
 
@@ -314,106 +314,120 @@ def run(
         if right_socket is not None and right_end is not None:
             im0, d_r, h_dist_right, v_dist_right = calc_draw_dist(im0, right_socket, right_end, right=True)
 
-        # # если не нашли руку, то попробуем её поднять
-        if not not_move_arm:
-            if flag_can_move:
-                time_end = time.time()
-                if len(ends) == 0:
-                    print('no arm', time_no_arm)
-                    node._positions = [1.0, 0.0, 0.0, 0.8, 0.0, -0.15, 0.0]
 
-                    if flag_can_move:
-                        time_end = time_end + 2.5
-                    flag_can_move = False
+        if not not_move_arm and flag_can_move:
+            time_end = time.time()
+            '''
+            Case 1: No arm found, so we up the arm to start position - shoulder to 90, elbow to 60. 
+            '''
+            if len(ends) == 0:
+                print('no arm', time_no_arm)
+                node._positions = [1.0, 0.0, 0.0, 0.8, 0.0, -0.15, 0.0]
 
-                    time_no_arm += 1
+                '''
+                Finding x, y using forward kinematics.
+                x = XA + x' = L1*cos(Q1) + L2*cos(Q1+Q2)
+                y = YA + y' = L1*sin(Q1) + L2*sin(Q1+Q2)
+                '''
 
-                if flag_arm_down or v_dist_right is not None and abs(v_dist_right)>100:
-                    if v_dist_right:
-                        if abs(v_dist_right * d_r) > 12:
-                            if flag_can_move:
-                                time_end = time_end + 2.5
+                x = 256.1 * math.cos(node._positions[0] * math.pi/2) + (249.1+89+85) * math.cos((node._positions[0] + node._positions[3]) * math.pi/2)
+                y = 256.1 * math.sin(node._positions[0] * math.pi/2) + (249.1+89+85) * math.sin((node._positions[0] + node._positions[3]) * math.pi/2)
 
-                            dg = math.atan(v_dist_right / h_dist_right) / math.pi / 2.5
-                            node._positions[0] -= dg
-                            print('v dist right: '+str(v_dist_right*d_r )+ ' ' + str(dg) + ' '+ str(node._positions))
+                LOGGER.info("X, Y:", x, y)
+                if flag_can_move:
+                    time_end = time_end + 2.5
+                flag_can_move = False
 
-                            time_no_arm = 0
-                            flag_can_move = False
-                            flag_arm_down = False
+                time_no_arm += 1
+            '''
+            Case 2: Using invers
+            '''
+            if v_dist_right and flag_arm_down:
 
-                if h_dist_right:
-                    # move arm little closer
-                    if abs(h_dist_right * d_r) > 55 and abs(v_dist_right) < 40 and h_dist_left and abs(h_dist_left)<30:
+                    if abs(v_dist_right * d_r) > 12:
                         if flag_can_move:
                             time_end = time_end + 2.5
 
-                        # if v_dist_right * d_r > 5:
-                        #     node._positions[0] -= 0.005
-                        # elif v_dist_right * d_r < -5:
-                        #     node._positions[0] += 0.005
+                        dg = math.atan(v_dist_right / h_dist_right) / math.pi / 2.5
+                        node._positions[0] -= dg
+                        print('v dist right: '+str(v_dist_right*d_r )+ ' ' + str(dg) + ' '+ str(node._positions))
 
-                        if node._positions[3] < 0:
-                            print("Arm is located too far. Please move it closer.")
-                            break
-                        if h_dist_right * d_r > 75:
-                            node._positions[0] += 0.15
-                            node._positions[3]-= 0.25
-
-                        elif h_dist_right * d_r>55:
-                            node._positions[0] += 0.01
-                            node._positions[3] -= 0.03
-
-                            print(
-                                'h dist right: ' + str(h_dist_right * d_r) +  ' ' + str(node._positions))
                         time_no_arm = 0
                         flag_can_move = False
-                    elif h_dist_right < 47:
-                        if flag_can_move:
-                            time_end = time_end + 2
-                        node._positions[3] += 0.5
-                        flag_can_move = False
+                        flag_arm_down = False
 
-                if h_dist_left and not flag_arm_down:
-                    if abs(h_dist_left) * d_r > 30 and flag_arm_side:
-                        if flag_can_move:
-                            time_end = time_end + 2
+            if h_dist_right:
+                # move arm little closer
+                if abs(h_dist_right * d_r) > 55 and abs(v_dist_right) < 40 and h_dist_left and abs(h_dist_left)<30:
+                    if flag_can_move:
+                        time_end = time_end + 2.5
 
-                        d = math.atan(h_dist_left / v_dist_right) / math.pi / 2
-                        flag_arm_side = False
+                    # if v_dist_right * d_r > 5:
+                    #     node._positions[0] -= 0.005
+                    # elif v_dist_right * d_r < -5:
+                    #     node._positions[0] += 0.005
 
-                        if h_dist_left>0:
-                            node._positions[1] = node._positions[1] + d - 0.15
-                        else:
-                            node._positions[1] = node._positions[1] - d + 0.15
+                    if node._positions[3] < 0:
+                        print("Arm is located too far. Please move it closer.")
+                        break
+                    if h_dist_right * d_r > 75:
+                        node._positions[0] += 0.15
+                        node._positions[3]-= 0.25
 
-                    elif abs(h_dist_left * d_r-10) > 10:
-                        if flag_can_move:
-                            time_end = time_end + 2
+                    elif h_dist_right * d_r>55:
+                        node._positions[0] += 0.01
+                        node._positions[3] -= 0.03
 
-                        if h_dist_left>15:
-                            d = 0.1
-                        else:
-                            d = 0.03
+                        print(
+                            'h dist right: ' + str(h_dist_right * d_r) +  ' ' + str(node._positions))
+                    time_no_arm = 0
+                    flag_can_move = False
+                elif h_dist_right < 47:
+                    if flag_can_move:
+                        time_end = time_end + 2
+                    node._positions[3] += 0.5
+                    flag_can_move = False
 
-                        if h_dist_left > 0:
-                            node._positions[1] = node._positions[1] - d
-                        else:
-                            node._positions[1] = node._positions[1] + d
+            if h_dist_left and not flag_arm_down:
+                if abs(h_dist_left) * d_r > 30 and flag_arm_side:
+                    if flag_can_move:
+                        time_end = time_end + 2
 
-                            print('h dist left: '+str(h_dist_left*d_r) +' '+ str(d_h)+ ' '+ str(node._positions))
-                        time_no_arm = 0
-                        flag_can_move = False
-                print('move all',time.time(), time_end, node._positions)
-                node.move_all_joints(1.0)
+                    d = math.atan(h_dist_left / v_dist_right) / math.pi / 2
+                    flag_arm_side = False
 
-                if h_dist_left and h_dist_right and v_dist_right:
-                    if abs(h_dist_left*d_l-10)<15 and abs(h_dist_right)*d_r<60 and abs(v_dist_right*d_r)<10:
-                        print("Seems like connected")
-                        flag_can_move = False
-                        flag_to_disconnect = True
-                        time_to_disconnect = time.time()+10
-                        time_end = time.time()+100
+                    if h_dist_left>0:
+                        node._positions[1] = node._positions[1] + d - 0.15
+                    else:
+                        node._positions[1] = node._positions[1] - d + 0.15
+
+                elif abs(h_dist_left * d_r-10) > 10:
+                    if flag_can_move:
+                        time_end = time_end + 2
+
+                    if h_dist_left>15:
+                        d = 0.1
+                    else:
+                        d = 0.03
+
+                    if h_dist_left > 0:
+                        node._positions[1] = node._positions[1] - d
+                    else:
+                        node._positions[1] = node._positions[1] + d
+
+                        print('h dist left: '+str(h_dist_left*d_r) +' '+ str(d_h)+ ' '+ str(node._positions))
+                    time_no_arm = 0
+                    flag_can_move = False
+            print('move all',time.time(), time_end, node._positions)
+            node.move_all_joints(1.0)
+
+            if h_dist_left and h_dist_right and v_dist_right:
+                if abs(h_dist_left*d_l-10)<15 and abs(h_dist_right)*d_r<60 and abs(v_dist_right*d_r)<10:
+                    print("Seems like connected")
+                    flag_can_move = False
+                    flag_to_disconnect = True
+                    time_to_disconnect = time.time()+10
+                    time_end = time.time()+100
 
             # Stream results
         im0 = annotator.result()
