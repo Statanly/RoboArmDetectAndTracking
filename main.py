@@ -340,84 +340,51 @@ def run(
 
                 time_no_arm += 1
             '''
-            Case 2: Using invers
+            Case 2: Using inverse kinematics
             '''
-            if v_dist_right and flag_arm_down:
-
-                    if abs(v_dist_right * d_r) > 12:
-                        if flag_can_move:
-                            time_end = time_end + 2.5
-
-                        dg = math.atan(v_dist_right / h_dist_right) / math.pi / 2.5
-                        node._positions[0] -= dg
-                        print('v dist right: '+str(v_dist_right*d_r )+ ' ' + str(dg) + ' '+ str(node._positions))
-
-                        time_no_arm = 0
-                        flag_can_move = False
-                        flag_arm_down = False
-
-            if h_dist_right:
-                # move arm little closer
-                if abs(h_dist_right * d_r) > 55 and abs(v_dist_right) < 40 and h_dist_left and abs(h_dist_left)<30:
+            if flag_arm_down: #no moving before
+                dx, dy, ds = 0, 0, 0
+                if v_dist_right and abs(v_dist_right * d_r) > 12:
                     if flag_can_move:
                         time_end = time_end + 2.5
 
-                    # if v_dist_right * d_r > 5:
-                    #     node._positions[0] -= 0.005
-                    # elif v_dist_right * d_r < -5:
-                    #     node._positions[0] += 0.005
+                    dy = v_dist_right*d_r
 
-                    if node._positions[3] < 0:
-                        print("Arm is located too far. Please move it closer.")
-                        break
-                    if h_dist_right * d_r > 75:
-                        node._positions[0] += 0.15
-                        node._positions[3]-= 0.25
-
-                    elif h_dist_right * d_r>55:
-                        node._positions[0] += 0.01
-                        node._positions[3] -= 0.03
-
-                        print(
-                            'h dist right: ' + str(h_dist_right * d_r) +  ' ' + str(node._positions))
                     time_no_arm = 0
                     flag_can_move = False
-                elif h_dist_right < 47:
+
+                if h_dist_right and abs(h_dist_right * d_r) > 55:
                     if flag_can_move:
-                        time_end = time_end + 2
-                    node._positions[3] += 0.5
-                    flag_can_move = False
+                        time_end = time_end + 2.5
 
-            if h_dist_left and not flag_arm_down:
-                if abs(h_dist_left) * d_r > 30 and flag_arm_side:
-                    if flag_can_move:
-                        time_end = time_end + 2
+                    dx = h_dist_right * d_r
 
-                    d = math.atan(h_dist_left / v_dist_right) / math.pi / 2
-                    flag_arm_side = False
-
-                    if h_dist_left>0:
-                        node._positions[1] = node._positions[1] + d - 0.15
-                    else:
-                        node._positions[1] = node._positions[1] - d + 0.15
-
-                elif abs(h_dist_left * d_r-10) > 10:
-                    if flag_can_move:
-                        time_end = time_end + 2
-
-                    if h_dist_left>15:
-                        d = 0.1
-                    else:
-                        d = 0.03
-
-                    if h_dist_left > 0:
-                        node._positions[1] = node._positions[1] - d
-                    else:
-                        node._positions[1] = node._positions[1] + d
-
-                        print('h dist left: '+str(h_dist_left*d_r) +' '+ str(d_h)+ ' '+ str(node._positions))
                     time_no_arm = 0
                     flag_can_move = False
+
+                if h_dist_left and abs(h_dist_left * d_r) > 30:
+                    if flag_can_move:
+                        time_end = time_end + 2
+
+                    ds = h_dist_left * d_r
+
+                    time_no_arm = 0
+                    flag_can_move = False
+
+                '''Find angles:
+                Q1 = q1 - q2 = arccos( x/B ) - arccos(L1^2 - L2^2 + B^2 / 2*B*L1 )
+                Q2 = PI - arccos( L1^2 + L2^2 - B^2 / 2*L1*L2  )
+                '''
+
+                x, y = x+dx, y+dy
+                B = math.sqrt(x*x+y*y)
+
+                q1 =  math.acos(x/B) - math.acos(256.1**2 - (249.1+89+85)**2 + B*2 / 2*B*256.1)/math.pi*2
+                q2 = math.pi - math.acos(256.1**2 + (249.1+89+85)**2 - B**2 / 2*256.1*(249.1+89+85))
+
+                node._positions[0] = q1
+                node._positions[3] = q2
+
             print('move all',time.time(), time_end, node._positions)
             node.move_all_joints(1.0)
 
