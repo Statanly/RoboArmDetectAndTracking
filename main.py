@@ -314,7 +314,6 @@ def run(
         if right_socket is not None and right_end is not None:
             im0, d_r, h_dist_right, v_dist_right = calc_draw_dist(im0, right_socket, right_end, right=True)
 
-
         if not not_move_arm and flag_can_move:
             time_end = time.time()
             '''
@@ -333,22 +332,22 @@ def run(
                 x = 256.1 * math.cos(node._positions[0] * math.pi/2) + (249.1+89+85) * math.cos((node._positions[0] + node._positions[3]) * math.pi/2)
                 y = 256.1 * math.sin(node._positions[0] * math.pi/2) + (249.1+89+85) * math.sin((node._positions[0] + node._positions[3]) * math.pi/2)
 
-                LOGGER.info("X, Y:", x, y)
+                print("X, Y:", x, y)
                 if flag_can_move:
                     time_end = time_end + 2.5
                 flag_can_move = False
 
                 time_no_arm += 1
-            '''
-            Case 2: Using inverse kinematics
-            '''
-            if flag_arm_down: #no moving before
+
+            #Case 2: Using inverse kinematics
+
+            elif flag_arm_down: #no moving before
                 dx, dy, ds = 0, 0, 0
                 if v_dist_right and abs(v_dist_right * d_r) > 12:
                     if flag_can_move:
                         time_end = time_end + 2.5
 
-                    dy = v_dist_right*d_r
+                    dx = v_dist_right*d_r
 
                     time_no_arm = 0
                     flag_can_move = False
@@ -357,7 +356,7 @@ def run(
                     if flag_can_move:
                         time_end = time_end + 2.5
 
-                    dx = h_dist_right * d_r
+                    dy = h_dist_right * d_r
 
                     time_no_arm = 0
                     flag_can_move = False
@@ -375,12 +374,17 @@ def run(
                 Q1 = q1 - q2 = arccos( x/B ) - arccos(L1^2 - L2^2 + B^2 / 2*B*L1 )
                 Q2 = PI - arccos( L1^2 + L2^2 - B^2 / 2*L1*L2  )
                 '''
-
-                x, y = x+dx, y+dy
+                print(dx)
+                print(dy)
+                x, y = x+dx, y+dy-10
                 B = math.sqrt(x*x+y*y)
+                v = (256.1**2 - (249.1+89+85)**2 + B*2) / (2*B*256.1)
 
-                q1 =  math.acos(x/B) - math.acos(256.1**2 - (249.1+89+85)**2 + B*2 / 2*B*256.1)/math.pi*2
-                q2 = math.pi - math.acos(256.1**2 + (249.1+89+85)**2 - B**2 / 2*256.1*(249.1+89+85))
+                q1 = 1.0 + math.acos(x/B)/math.pi*2 - math.acos(v)/math.pi*2
+                v = (256.1**2 + (249.1+89+85)**2 - B**2) / (2*256.1*(249.1+89+85))
+                print("x y v ", str(x), str(y), str(v))
+
+                q2 = math.pi - math.acos(v)
 
                 node._positions[0] = q1
                 node._positions[3] = q2
@@ -446,14 +450,8 @@ def run(
         prev_frames[i] = curr_frames[i]
 
     if not not_move_arm:
-        if ros:
-            node.reset_joints()
-        else:
-            arm.move_joints([
-                {
-                    'name': 'left_arm_1_joint',
-                    'degree': 0
-                }], 2)
+        node.reset_joints()
+
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
     LOGGER.info(
