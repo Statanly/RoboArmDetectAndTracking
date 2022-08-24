@@ -115,12 +115,17 @@ class LoadImages:
             ret_val_f, img_f0 = self.cap_front.read()
             ret_val_s, img_s0 = self.cap_side.read()
 
+
             # cv2.imshow('front', cv2.resize(img_f0, (img_f0.shape[1]//2, img_s0.shape[0]//2)))
             # cv2.imshow('side', cv2.resize(img_s0,  (img_s0.shape[1]//2, img_s0.shape[0]//2)))
             if not ret_val_s or not ret_val_f:
                 self.cap_front.release()
                 self.cap_side.release()
                 raise StopIteration
+            else:
+                w, h = min(img_f0.shape[1], img_s0.shape[1]), min(img_f0.shape[0], img_s0.shape[0])
+                img_f0 = cv2.resize(img_f0, (w, h))
+                img_s0 = cv2.resize(img_s0, (w, h))
 
             self.frame += 1
             s = f'video {self.count + 1}/{self.nf} ({self.frame}/{self.frames_front}) {path}: '
