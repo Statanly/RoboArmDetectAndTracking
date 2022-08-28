@@ -331,10 +331,12 @@ def run(
                 x = XA + x' = L1*cos(Q1) + L2*cos(Q1+Q2)
                 y = YA + y' = L1*sin(Q1) + L2*sin(Q1+Q2)
                 '''
-
-                x = L1 * math.cos(node._positions[0]) + L2 * math.cos((node._positions[0] + node._positions[3]))
-                y = L1 * math.sin(node._positions[0]) + L2 * math.sin((node._positions[0] + node._positions[3]))
-                print("X, Y start", x, y)
+                try:
+                    x = L1 * math.cos(node._positions[0]) + L2 * math.cos((node._positions[0] + node._positions[3]))
+                    y = L1 * math.sin(node._positions[0]) + L2 * math.sin((node._positions[0] + node._positions[3]))
+                except:
+                    print("Error in locating arms end.")
+                    break
                 if flag_can_move:
                     time_end = time_end + delay
                 flag_can_move = False
@@ -345,7 +347,7 @@ def run(
             #Case 2: Using inverse kinematics
 
             elif flag_arm_down: #no moving before
-                print("first move")
+                print("First move processing...")
                 dx, dy, ds = 0, 0, 0
                 if v_dist_right and abs(v_dist_right * d_r) > 12:
                     if flag_can_move:
@@ -359,8 +361,8 @@ def run(
                 if h_dist_right and abs(h_dist_right * d_r) > 55:
                     if flag_can_move:
                         time_end = time_end + delay
-
-                    dy = h_dist_right * d_r
+                    ## 55 - compensation of width of reciever and socket, 5 - to have distance.
+                    dy = h_dist_right * d_r-55-10
 
                     time_no_arm = 0
                     flag_can_move = False
@@ -381,7 +383,7 @@ def run(
                 print("dx", "dy", str(dx), str(dy))
                 try:
                     x, y = x+dx, y+dy
-                    print("X, y new", str(x), str(y))
+                    # print("X, y new", str(x), str(y))
                     B = math.sqrt(x*x+y*y)
                     v = (L1**2 - L2**2 + B**2) / (2*B*L1)
                     q1 = math.acos(x/B) - math.acos(v)
@@ -389,7 +391,7 @@ def run(
                     q2 = (math.pi - math.acos(v))
                     q3 = -math.atan(ds/y)
                     if q3 < 0:
-                        print("Move arm more to the right.")
+                        print("Error. Please move arm more to the right.")
                         break;
                     node._positions[0] = q1
                     node._positions[3] = q2
@@ -397,9 +399,8 @@ def run(
                     print("angles", q1, q2, q3)
                 except ValueError as e:
                     node.reset_joints()
-                    print(e, str(v))
-
-
+                    print("Error in detecting new position. Mostly that mean that arm is located too far. "
+                          "Please move it closer. ", str(v))
 
                 # print('move all',time.time(), time_end, node._positions)
                 flag_arm_down = False
@@ -450,12 +451,12 @@ def run(
                             node._positions[0] += 0.05
                         flag_can_move = False
 
-                print('move all small', time.time(), time_end, node._positions)
+                print('Move all with small moves.', time.time(), time_end, node._positions)
                 node.move_all_joints(1.0)
 
         if h_dist_left and h_dist_right and v_dist_right:
             if abs(h_dist_left*d_l-10)<5 and abs(h_dist_right)*d_r<60 and abs(v_dist_right*d_r)<10:
-                print("Seems like connected")
+                print("Seems like connected. Waiting...")
                 flag_can_move = False
                 flag_to_disconnect = True
                 time_to_disconnect = time.time()+10
@@ -505,7 +506,7 @@ def run(
 
                 break
             if time.time() > time_to_connect:
-                print("Cannot connect in time")
+                print("Cannot connect in time. Please try again.")
                 node.reset_joints()
                 break
         prev_frames[i] = curr_frames[i]
