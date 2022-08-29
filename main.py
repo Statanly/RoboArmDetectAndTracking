@@ -454,6 +454,9 @@ def run(
                 print('Move all with small moves.', time.time(), time_end, node._positions)
                 node.move_all_joints(1.0)
 
+        if h_dist_left and abs(h_dist_left*d_l) > 100 or h_dist_right and abs(h_dist_right*d_r)>200 or v_dist_right and abs(v_dist_right*d_r)>10:
+            print("Arm was moving strange...")
+            flag_can_move = True
         if h_dist_left and h_dist_right and v_dist_right:
             if abs(h_dist_left*d_l-10)<5 and abs(h_dist_right)*d_r<60 and abs(v_dist_right*d_r)<10:
                 print("Seems like connected. Waiting...")
