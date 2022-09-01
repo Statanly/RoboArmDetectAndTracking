@@ -9,8 +9,10 @@ def calc_draw_dist(im0, socket, end, right=False):
     if right:
         e_h, e_v = (int(end[0] + end[2])) // 2, (int(end[1] + end[3])) // 2,
     else:
-        e_v = int(end[1] + end[3] + (end[3]-end[1])//3 ) // 2
-        e_h = int(end[0] + end[2] + (end[2]-end[0])//2) // 2
+        # e_v = int(end[1] + end[3] + (end[3]-end[1])//3 ) // 2
+        e_v = int(end[1] + end[3]) // 2
+        # e_h = int(end[0] + end[2] + (end[2]-end[0])//2) // 2
+        e_h = int(end[0] + end[2]) // 2
     h_dist = (s_h - e_h)
     v_dist = (s_v - e_v)
 

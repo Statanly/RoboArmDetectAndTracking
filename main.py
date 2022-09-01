@@ -126,7 +126,8 @@ def run(
         hide_class=False,  # hide IDs
         half=False,  # use FP16 half-precision inference
         not_move_arm=False,
-        connection_time = 30
+        connection_time = 30,
+        delay = 5
 ):
     if not not_move_arm:
         rospy.init_node('joint_control_sim_test')
@@ -139,6 +140,7 @@ def run(
     flag_arm_down = True
     flag_arm_side = True
     x, y = 0, 0
+    delay = int(delay)
 
 
     flag_to_disconnect = False
@@ -209,7 +211,7 @@ def run(
         key=cv2.waitKey(1) &0xFF
         if key == ord("q"):
             break
-        if frame_idx%2:
+        if frame_idx%2 or frame_idx%3:
             continue
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
@@ -313,7 +315,8 @@ def run(
 
         if right_socket is not None and right_end is not None:
             im0, d_r, h_dist_right, v_dist_right = calc_draw_dist(im0, right_socket, right_end, right=True)
-
+        L1 = 256.1
+        L2 = 249.1+89+85+40
 
         if not not_move_arm and flag_can_move:
             time_end = time.time()
@@ -322,49 +325,51 @@ def run(
             '''
             if len(ends) == 0:
                 print('no arm', time_no_arm)
-                node._positions = [1.0, 0.0, 0.0, 0.8, 0.0, -0.15, 0.0]
-
+                node._positions = [1.0, 0.0, 0.0, 0.9, 0.0, -0.07, 0.0]
                 '''
                 Finding x, y using forward kinematics.
                 x = XA + x' = L1*cos(Q1) + L2*cos(Q1+Q2)
                 y = YA + y' = L1*sin(Q1) + L2*sin(Q1+Q2)
                 '''
-
-                x = 256.1 * math.cos(node._positions[0] * math.pi/2) + (249.1+89+85) * math.cos((node._positions[0] + node._positions[3]) * math.pi/2)
-                y = 256.1 * math.sin(node._positions[0] * math.pi/2) + (249.1+89+85) * math.sin((node._positions[0] + node._positions[3]) * math.pi/2)
-
-                LOGGER.info("X, Y:", x, y)
+                try:
+                    x = L1 * math.cos(node._positions[0]) + L2 * math.cos((node._positions[0] + node._positions[3]))
+                    y = L1 * math.sin(node._positions[0]) + L2 * math.sin((node._positions[0] + node._positions[3]))
+                except:
+                    print("Error in locating arms end.")
+                    break
                 if flag_can_move:
-                    time_end = time_end + 2.5
+                    time_end = time_end + delay
                 flag_can_move = False
-
+                flag_arm_down = True
+                node.move_all_joints(2.0)
                 time_no_arm += 1
-            '''
-            Case 2: Using inverse kinematics
-            '''
-            if flag_arm_down: #no moving before
+
+            #Case 2: Using inverse kinematics
+
+            elif flag_arm_down: #no moving before
+                print("First move processing...")
                 dx, dy, ds = 0, 0, 0
                 if v_dist_right and abs(v_dist_right * d_r) > 12:
                     if flag_can_move:
-                        time_end = time_end + 2.5
+                        time_end = time_end + delay
 
-                    dy = v_dist_right*d_r
+                    dx = v_dist_right*d_r
 
                     time_no_arm = 0
                     flag_can_move = False
 
                 if h_dist_right and abs(h_dist_right * d_r) > 55:
                     if flag_can_move:
-                        time_end = time_end + 2.5
-
-                    dx = h_dist_right * d_r
+                        time_end = time_end + delay
+                    ## 55 - compensation of width of reciever and socket, 5 - to have distance.
+                    dy = h_dist_right * d_r-55-10
 
                     time_no_arm = 0
                     flag_can_move = False
 
-                if h_dist_left and abs(h_dist_left * d_r) > 30:
+                if h_dist_left and abs(h_dist_left * d_r) > 10:
                     if flag_can_move:
-                        time_end = time_end + 2
+                        time_end = time_end + delay
 
                     ds = h_dist_left * d_r
 
@@ -375,31 +380,95 @@ def run(
                 Q1 = q1 - q2 = arccos( x/B ) - arccos(L1^2 - L2^2 + B^2 / 2*B*L1 )
                 Q2 = PI - arccos( L1^2 + L2^2 - B^2 / 2*L1*L2  )
                 '''
+                print("dx", "dy", str(dx), str(dy))
+                try:
+                    x, y = x+dx, y+dy
+                    # print("X, y new", str(x), str(y))
+                    B = math.sqrt(x*x+y*y)
+                    v = (L1**2 - L2**2 + B**2) / (2*B*L1)
+                    q1 = math.acos(x/B) - math.acos(v)
+                    v = (L1**2 + L2**2 - B**2) / (2*L1*L2)
+                    q2 = (math.pi - math.acos(v))
+                    q3 = -math.atan(ds/y)
+                    if q3 < 0:
+                        print("Error. Please move arm more to the right.")
+                        break;
+                    node._positions[0] = q1
+                    node._positions[3] = q2
+                    node._positions[1] = q3
+                    print("angles", q1, q2, q3)
+                except ValueError as e:
+                    node.reset_joints()
+                    print("Error in detecting new position. Mostly that mean that arm is located too far. "
+                          "Please move it closer. ", str(v))
 
-                x, y = x+dx, y+dy
-                B = math.sqrt(x*x+y*y)
+                # print('move all',time.time(), time_end, node._positions)
+                flag_arm_down = False
+                flag_can_move = False
+                node.move_all_joints(1.5)
+            else:
+                if h_dist_left and abs(h_dist_left * d_r) > 5:
+                    if flag_can_move:
+                        time_end = time_end + delay
 
-                q1 =  math.acos(x/B) - math.acos(256.1**2 - (249.1+89+85)**2 + B*2 / 2*B*256.1)/math.pi*2
-                q2 = math.pi - math.acos(256.1**2 + (249.1+89+85)**2 - B**2 / 2*256.1*(249.1+89+85))
+                    if abs(h_dist_left*d_l) > 50:
+                        d = 0.1
+                    else:
+                        d = 0.03
 
-                node._positions[0] = q1
-                node._positions[3] = q2
-
-            print('move all',time.time(), time_end, node._positions)
-            node.move_all_joints(1.0)
-
-            if h_dist_left and h_dist_right and v_dist_right:
-                if abs(h_dist_left*d_l-10)<15 and abs(h_dist_right)*d_r<60 and abs(v_dist_right*d_r)<10:
-                    print("Seems like connected")
+                    if h_dist_left > 0:
+                        node._positions[1] = node._positions[1] - d
+                    else:
+                        node._positions[1] = node._positions[1] + d
                     flag_can_move = False
-                    flag_to_disconnect = True
-                    time_to_disconnect = time.time()+10
-                    time_end = time.time()+100
+                if h_dist_right:
+                    # move arm little closer
+                    if abs(h_dist_right * d_r) > 50 and abs(v_dist_right) < 40:
+                        if flag_can_move:
+                            time_end = time_end + delay
+
+                        if node._positions[3] < 0.15:
+                            print(node._positions)
+                            print("Arm is located too far. Please move it closer.")
+                            break
+                        if h_dist_right * d_r > 75:
+                            node._positions[0] += 0.15
+                            node._positions[3] -= 0.25
+
+                        elif h_dist_right * d_r > 55:
+                            node._positions[0] += 0.02
+                            node._positions[3] -= 0.04
+                        flag_can_move = False
+                if v_dist_right:
+                    # move arm little closer
+                    if abs(v_dist_right * d_r) > 20:
+                        if flag_can_move:
+                            time_end = time_end + delay
+
+                        if v_dist_right * d_r > 0:
+                            node._positions[0] -= 0.05
+                        else:
+                            node._positions[0] += 0.05
+                        flag_can_move = False
+
+                print('Move all with small moves.', time.time(), time_end, node._positions)
+                node.move_all_joints(1.0)
+
+        if h_dist_left and abs(h_dist_left*d_l) > 100 or h_dist_right and abs(h_dist_right*d_r)>200 or v_dist_right and abs(v_dist_right*d_r)>10:
+            print("Arm was moving strange...")
+            flag_can_move = True
+        if h_dist_left and h_dist_right and v_dist_right:
+            if abs(h_dist_left*d_l-10)<5 and abs(h_dist_right)*d_r<60 and abs(v_dist_right*d_r)<10:
+                print("Seems like connected. Waiting...")
+                flag_can_move = False
+                flag_to_disconnect = True
+                time_to_disconnect = time.time()+10
+                time_end = time.time()+100
 
             # Stream results
         im0 = annotator.result()
         if show_vid:
-            im0 = cv2.resize(im0, (im0.shape[1] // 5, im0.shape[0] // 5))
+            # im0 = cv2.resize(im0, (im0.shape[1] // 5, im0.shape[0] // 5))
             cv2.imshow(str(p), im0)
             # cv2.waitKey(1)  # 1 millisecond
 
@@ -440,31 +509,26 @@ def run(
 
                 break
             if time.time() > time_to_connect:
-                print("Cannot connect in time")
+                print("Cannot connect in time. Please try again.")
                 node.reset_joints()
                 break
         prev_frames[i] = curr_frames[i]
 
     if not not_move_arm:
-        if ros:
-            node.reset_joints()
-        else:
-            arm.move_joints([
-                {
-                    'name': 'left_arm_1_joint',
-                    'degree': 0
-                }], 2)
-    # Print results
-    t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
-    LOGGER.info(
-        f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS, %.1fms strong sort update per image at shape {(1, 3, *imgsz)}' % t)
-    print(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS, %.1fms strong sort update per image at shape {(1, 3, *imgsz)}' % t)
-    if save_vid:
-        s = ''
-        LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
-    if update:
-        strip_optimizer(yolo_weights)  # update model (to fix SourceChangeWarning)
-
+        node.reset_joints()
+    try:
+        # Print results
+        t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
+        LOGGER.info(
+            f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS, %.1fms strong sort update per image at shape {(1, 3, *imgsz)}' % t)
+        print(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS, %.1fms strong sort update per image at shape {(1, 3, *imgsz)}' % t)
+        if save_vid:
+            s = ''
+            LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
+        if update:
+            strip_optimizer(yolo_weights)  # update model (to fix SourceChangeWarning)
+    except ZeroDivisionError:
+        pass
 
 def main(opt):
     check_requirements(requirements=ROOT / 'requirements.txt', exclude=('tensorboard', 'thop'))
