@@ -318,14 +318,14 @@ def run(
         L1 = 256.1
         L2 = 249.1+89+85+40
 
-        if not not_move_arm and flag_can_move:
+        if not not_move_arm and flag_can_move and not flag_to_disconnect:
             time_end = time.time()
             '''
             Case 1: No arm found, so we up the arm to start position - shoulder to 90, elbow to 60. 
             '''
             if len(ends) == 0:
                 print('no arm', time_no_arm)
-                node._positions = [1.0, 0.0, 0.0, 0.9, 0.0, -0.07, 0.0]
+                node._positions = [0.9, 0.0, 0.0, 1.0, 0.0, -0.13, 0.0]
                 '''
                 Finding x, y using forward kinematics.
                 x = XA + x' = L1*cos(Q1) + L2*cos(Q1+Q2)
@@ -346,10 +346,10 @@ def run(
 
             #Case 2: Using inverse kinematics
 
-            elif flag_arm_down: #no moving before
+            elif flag_arm_down and v_dist_right and h_dist_right and h_dist_left: #no moving before
                 print("First move processing...")
                 dx, dy, ds = 0, 0, 0
-                if v_dist_right and abs(v_dist_right * d_r) > 12:
+                if v_dist_right and abs(v_dist_right * d_r) > 5:
                     if flag_can_move:
                         time_end = time_end + delay
 
@@ -358,20 +358,20 @@ def run(
                     time_no_arm = 0
                     flag_can_move = False
 
-                if h_dist_right and abs(h_dist_right * d_r) > 55:
+                if h_dist_right and abs(h_dist_right * d_r) > 50:
                     if flag_can_move:
                         time_end = time_end + delay
                     ## 55 - compensation of width of reciever and socket, 5 - to have distance.
-                    dy = h_dist_right * d_r-55-10
+                    dy = h_dist_right * d_r-55
 
                     time_no_arm = 0
                     flag_can_move = False
 
-                if h_dist_left and abs(h_dist_left * d_r) > 10:
+                if h_dist_left and abs(h_dist_left * d_l) > 10:
                     if flag_can_move:
                         time_end = time_end + delay
 
-                    ds = h_dist_left * d_r
+                    ds = h_dist_left * d_r+40
 
                     time_no_arm = 0
                     flag_can_move = False
@@ -389,13 +389,15 @@ def run(
                     q1 = math.acos(x/B) - math.acos(v)
                     v = (L1**2 + L2**2 - B**2) / (2*L1*L2)
                     q2 = (math.pi - math.acos(v))
-                    q3 = -math.atan(ds/y)
+                    q3 = -math.atan(ds/y)/1.5
                     if q3 < 0:
                         print("Error. Please move arm more to the right.")
                         break;
+                    node._positions[1] = q3
+                    node.move_all_joints(1)
+                    rospy.sleep(1)
                     node._positions[0] = q1
                     node._positions[3] = q2
-                    node._positions[1] = q3
                     print("angles", q1, q2, q3)
                 except ValueError as e:
                     node.reset_joints()
@@ -406,15 +408,15 @@ def run(
                 flag_arm_down = False
                 flag_can_move = False
                 node.move_all_joints(1.5)
-            else:
-                if h_dist_left and abs(h_dist_left * d_r) > 5:
+            elif  v_dist_right and h_dist_right and h_dist_left:
+                if h_dist_left and abs(h_dist_left * d_l) > 0:
                     if flag_can_move:
                         time_end = time_end + delay
 
                     if abs(h_dist_left*d_l) > 50:
-                        d = 0.1
+                        d = 0.05
                     else:
-                        d = 0.03
+                        d = 0.01
 
                     if h_dist_left > 0:
                         node._positions[1] = node._positions[1] - d
@@ -423,7 +425,7 @@ def run(
                     flag_can_move = False
                 if h_dist_right:
                     # move arm little closer
-                    if abs(h_dist_right * d_r) > 50 and abs(v_dist_right) < 40:
+                    if abs(h_dist_right * d_r) > 40 and abs(v_dist_right) < 40:
                         if flag_can_move:
                             time_end = time_end + delay
 
@@ -435,30 +437,31 @@ def run(
                             node._positions[0] += 0.15
                             node._positions[3] -= 0.25
 
-                        elif h_dist_right * d_r > 55:
+                        elif h_dist_right * d_r > 45:
                             node._positions[0] += 0.02
                             node._positions[3] -= 0.04
                         flag_can_move = False
                 if v_dist_right:
                     # move arm little closer
-                    if abs(v_dist_right * d_r) > 20:
+                    if abs(v_dist_right * d_r) > 2:
                         if flag_can_move:
                             time_end = time_end + delay
-
                         if v_dist_right * d_r > 0:
-                            node._positions[0] -= 0.05
+                            node._positions[0] -= 0.03
                         else:
-                            node._positions[0] += 0.05
+                            node._positions[0] += 0.03
                         flag_can_move = False
 
                 print('Move all with small moves.', time.time(), time_end, node._positions)
                 node.move_all_joints(1.0)
+            else:
+                print("Try to find arm...")
 
-        if h_dist_left and abs(h_dist_left*d_l) > 100 or h_dist_right and abs(h_dist_right*d_r)>200 or v_dist_right and abs(v_dist_right*d_r)>10:
+        if (h_dist_left and abs(h_dist_left*d_l) > 100 or h_dist_right and abs(h_dist_right*d_r)>200 or v_dist_right and abs(v_dist_right*d_r)>10) and flag_can_move:
             print("Arm was moving strange...")
             flag_can_move = True
         if h_dist_left and h_dist_right and v_dist_right:
-            if abs(h_dist_left*d_l-10)<5 and abs(h_dist_right)*d_r<60 and abs(v_dist_right*d_r)<10:
+            if abs(h_dist_left*d_l)<5 and abs(h_dist_right)*d_r<50 and abs(v_dist_right*d_r)<5:
                 print("Seems like connected. Waiting...")
                 flag_can_move = False
                 flag_to_disconnect = True
@@ -468,7 +471,7 @@ def run(
             # Stream results
         im0 = annotator.result()
         if show_vid:
-            # im0 = cv2.resize(im0, (im0.shape[1] // 5, im0.shape[0] // 5))
+            im0 = cv2.resize(im0, (im0.shape[1] // 3, im0.shape[0] // 3))
             cv2.imshow(str(p), im0)
             # cv2.waitKey(1)  # 1 millisecond
 
@@ -494,7 +497,9 @@ def run(
                 if \
                         time.time() > time_to_disconnect:
                     print("Disconnectd after connection")
-                    node._positions[3] += 0.5
+                    node._positions[3] = 1.1
+                    node.move_all_joints(1.5)
+                    rospy.sleep(2)
                     node._positions[0] -= 0.3
                     node.move_all_joints(1.5)
                     rospy.sleep(2)
@@ -515,6 +520,9 @@ def run(
         prev_frames[i] = curr_frames[i]
 
     if not not_move_arm:
+        node._positions[3] = 1.3
+        node.move_all_joints(1.5)
+        rospy.sleep(0.5)
         node.reset_joints()
     try:
         # Print results
