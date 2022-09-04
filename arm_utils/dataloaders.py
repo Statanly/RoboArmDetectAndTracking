@@ -93,6 +93,8 @@ class LoadImages:
         self.video_flag = [False] * ni + [True] * nv
         self.mode = 'image'
         self.auto = auto
+        self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
         if any(videos_front) and any(videos_side):
             self.new_video(videos_front[0] , videos_side[0]) # new video
         else:
@@ -140,6 +142,7 @@ class LoadImages:
             assert img_f0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
         img0 = np.concatenate((img_f0, img_s0), axis=1)
+        # img0 = self.high_contrast(img0)
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
 
@@ -148,6 +151,23 @@ class LoadImages:
         img = np.ascontiguousarray(img)
 
         return path, img, img0, self.cap_front, self.cap_side, s
+
+    def high_contrast(self, img):
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        l_channel, a, b = cv2.split(lab)
+
+        # Applying CLAHE to L-channel
+        # feel free to try different values for the limit and grid size:
+        # clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
+        # cl = self.clahe.apply(l_channel)
+        cl = cv2.equalizeHist(l_channel)
+        # merge the CLAHE enhanced L-channel with the a and b channel
+        limg = cv2.merge((cl, a, b))
+
+        # Converting image from LAB Color model to BGR color spcae
+        enhanced_img = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+
+        return enhanced_img
 
     def new_video(self, path_front, path_side):
         self.frame = 0
