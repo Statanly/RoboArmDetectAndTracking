@@ -50,17 +50,20 @@ class ControlJoints:
     def spinOnce(self):
          # Время движения до указанной точки в секундах
         interval_to_point = 2
-        self._positions = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-        self.move_all_joints(interval_to_point)
-        rospy.sleep(5)
 
-        self._positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.move_all_joints(interval_to_point)
-        rospy.sleep(5)
+        for i in np.arange(0.8, 1.2, 0.1):
+            for j in range(0.9, 1.3, 0.1):
+                self._positions = [i, 1.0, 1.0, j, 1.0, 1.0, 1.0]
+                self.move_all_joints(interval_to_point)
+                rospy.sleep(5)
 
-        # Движения одного сустава
-        self.move_joint(str(self._arm_type) + '_arm_1_joint', 1.0, 3)
-        rospy.sleep(5)
+                self._positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+                self.move_all_joints(interval_to_point)
+                rospy.sleep(5)
+
+        # # Движения одного сустава
+        # self.move_joint(str(self._arm_type) + '_arm_1_joint', 1.0, 3)
+        # rospy.sleep(5)
 
     def rate(self):
         return self._rate
