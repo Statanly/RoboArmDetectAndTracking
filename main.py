@@ -208,6 +208,9 @@ def run(
     time_to_connect = time.time() + int(connection_time) + 3
     print(time.time(), time_to_connect)
     for frame_idx, (path, im, im0s, vid_cap_f, vid_cap_s, s) in enumerate(dataset):
+        if im is None:
+            LOGGER.info("No frame")
+            continue
         key=cv2.waitKey(1) &0xFF
         if key == ord("q"):
             break

@@ -12,6 +12,7 @@ from PIL import ExifTags, Image
 
 import cv2
 
+#https://github.com/opencv/opencv/issues/17734
 
 # Parameters
 IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp'  # include image suffixes
@@ -19,6 +20,8 @@ VID_FORMATS = 'asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 't
 BAR_FORMAT = '{l_bar}{bar:10}{r_bar}{bar:-10b}'  # tqdm bar format
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
 
+
+print(cv2.getBuildInformation())
 def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
     # Resize and pad image while meeting stride-multiple constraints
     shape = im.shape[:2]  # current shape [height, width]
@@ -121,9 +124,11 @@ class LoadImages:
             except AttributeError:
                 print("No frame")
             if not ret_val_s or not ret_val_f:
-                self.cap_front.release()
-                self.cap_side.release()
-                raise StopIteration
+                print("No next frame")
+                return path, None, None, self.cap_front, self.cap_side, f'image {self.count}/{self.nf} {path}: '
+                # self.cap_front.release()
+                # self.cap_side.release()
+                # raise StopIteration
             else:
                 w, h = min(img_f0.shape[1], img_s0.shape[1]), min(img_f0.shape[0], img_s0.shape[0])
                 img_f0 = cv2.resize(img_f0, (w, h))
@@ -150,10 +155,11 @@ class LoadImages:
         return path, img, img0, self.cap_front, self.cap_side, s
 
     def new_video(self, path_front, path_side):
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
         self.frame = 0
-        self.cap_front = cv2.VideoCapture(path_front)
+        self.cap_front = cv2.VideoCapture(path_front, cv2.CAP_FFMPEG)
         self.frames_front = max(int(self.cap_front.get(cv2.CAP_PROP_FRAME_COUNT)), 0) or float('inf')
-        self.cap_side = cv2.VideoCapture(path_side)
+        self.cap_side = cv2.VideoCapture(path_side, cv2.CAP_FFMPEG)
         self.frames_side = max(int(self.cap_side.get(cv2.CAP_PROP_FRAME_COUNT)), 0) or float('inf')
         # for _ in range(30):
         #     _, _ = self.cap_front.read()
