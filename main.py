@@ -310,10 +310,10 @@ def run(
 
         h_dist_right, v_dist_right, h_dist_left, v_dist_left = None, None, None, None
         d_l, d_r = 0, 0
-        if left_socket is not None and left_end is not None:
+        if left_socket is not None and left_end is not None and left_socket[0]<im0.shape[1]//2 and left_end[0]<im0.shape[1]//2:
             im0, d_l, h_dist_left, v_dist_left = calc_draw_dist(im0, left_socket, left_end)
 
-        if right_socket is not None and right_end is not None:
+        if right_socket is not None and right_end is not None and right_socket[0]>im0.shape[1]//2 and right_end[0]>im0.shape[1]//2:
             im0, d_r, h_dist_right, v_dist_right = calc_draw_dist(im0, right_socket, right_end, right=True)
         L1 = 256.1
         L2 = 249.1+89+85+35
@@ -363,7 +363,7 @@ def run(
                     if flag_can_move:
                         time_end = time_end + delay
                     ## 55 - compensation of width of reciever and socket, 5 - to have distance.
-                    dy = h_dist_right * d_r-70
+                    dy = h_dist_right * d_r-35
 
                     time_no_arm = 0
                     flag_can_move = False
@@ -390,12 +390,16 @@ def run(
                     q1 = math.acos(x/B) - math.acos(v)
                     v = (L1**2 + L2**2 - B**2) / (2*L1*L2)
                     q2 = (math.pi - math.acos(v))
-                    q3 = -math.atan(ds/y)*1.4
+                    q3 = -math.atan(ds/y)*1.2
                     if q3 < 0:
                         print("Error. Please move arm more to the right.")
                         break;
                     node._positions[1] = q3
-                    node._positions[6] = -q3*0.1
+                    if q3>0.3:
+                        node._positions[5] = q3*0.17
+                    if q3 < 0.3:
+                        node._positions[5] = -0.13
+                        node._positions[6] = -0.15
                     node.move_all_joints(1)
                     rospy.sleep(1)
                     node._positions[0] = q1
@@ -422,33 +426,41 @@ def run(
 
                     if h_dist_left > 0:
                         node._positions[1] = node._positions[1] - d
-                        node._positions[5] = node._positions[5] - 0.005
-                        node._positions[6] = node._positions[6] - 0.005
+                        if node._positions[1]>0.35:
+                            node._positions[5] = node._positions[5] - 0.01
+                            node._positions[6] = node._positions[6] - 0.02
                     else:
                         node._positions[1] = node._positions[1] + d
-                        node._positions[6] = node._positions[6] + 0.005
+                        if node._positions[1] > 0.35:
+                            node._positions[5] = node._positions[5] + 0.01
+                            node._positions[6] = node._positions[6] + 0.02
                     flag_can_move = False
                 if h_dist_right:
                     # move arm little closer
-                    if abs(h_dist_right * d_r) > 38 and abs(v_dist_right) < 40:
+                    if abs(h_dist_right * d_r) > 40 and abs(v_dist_right) < 40:
                         if flag_can_move:
                             time_end = time_end + delay
 
-                        if node._positions[3] < 0.15:
+                        if node._positions[3] < 0.05:
                             print(node._positions)
                             print("Arm is located too far. Please move it closer.")
                             break
-                        if h_dist_right * d_r > 75:
+
+                        if node._positions[3]> 0.5 and h_dist_right * d_r < 40 and abs(h_dist_left)<10:
+                            print("Arm is located too close. Please move it further.")
+                            break
+                        if h_dist_right * d_r > 50:
+                            print("Расгибание локтя")
                             node._positions[0] += 0.15
                             node._positions[3] -= 0.25
-                            if node._positions[1]>0.1:
-                                node._positions[1] -= 0.05
+                            if node._positions[1]>0.4:
+                                node._positions[1] -= 0.03
 
                         elif h_dist_right * d_r > 30:
-                            node._positions[0] += 0.05
-                            node._positions[3] -= 0.1
-                            if node._positions[1]>0.1:
-                                node._positions[1] -= 0.02
+                            node._positions[0] += 0.03
+                            node._positions[3] -= 0.07
+                            if node._positions[1]>0.4:
+                                node._positions[1] -= 0.03
                         flag_can_move = False
                 if v_dist_right:
                     # move arm little closer
@@ -473,11 +485,11 @@ def run(
 
 
         if h_dist_left and h_dist_right and v_dist_right:
-            if abs(h_dist_left*d_l)<3 and abs(h_dist_right)*d_r<40 and abs(v_dist_right*d_r)<5 and not flag_to_disconnect:
+            if abs(h_dist_left*d_l)<3 and abs(h_dist_right)*d_r<40 and abs(v_dist_right*d_r)<5 and not flag_to_disconnect and flag_can_move:
                 print("Seems like connected. Waiting...")
                 flag_can_move = False
                 flag_to_disconnect = True
-                time_to_disconnect = time.time()+3
+                time_to_disconnect = time.time()+10
                 time_end = time.time()+100
 
             # Stream results
@@ -527,14 +539,23 @@ def run(
                 break
             if time.time() > time_to_connect:
                 print("Cannot connect in time. Please try again.")
+                node._positions[3] = 1.3
+                node.move_all_joints(1.5)
+                rospy.sleep(2)
+                node._positions[0] -= 0.3
+                node.move_all_joints(1.5)
+                rospy.sleep(2)
                 node.reset_joints()
                 break
         prev_frames[i] = curr_frames[i]
 
     if not not_move_arm:
-        node._positions[3] -=0.2
+        node._positions[3] = 1.3
         node.move_all_joints(1.5)
-        rospy.sleep(0.5)
+        rospy.sleep(2)
+        node._positions[0] -= 0.3
+        node.move_all_joints(1.5)
+        rospy.sleep(2)
         node.reset_joints()
     try:
         # Print results

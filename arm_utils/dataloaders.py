@@ -122,11 +122,18 @@ class LoadImages:
                 # cv2.imshow('side', cv2.resize(img_s0,  (img_s0.shape[1]//2, img_s0.shape[0]//2)))
             except AttributeError:
                 print("No frame")
+            while ret_val_f is None or ret_val_f is None:
+                ret_val_f, img_f0 = self.cap_front.read()
+                ret_val_s, img_s0 = self.cap_side.read()
             if not ret_val_s or not ret_val_f:
+                # print(img_s0, img_f0)
+                # print("No next frame"
+                #       "")
                 self.cap_front.release()
                 self.cap_side.release()
                 raise StopIteration
             else:
+                # print(img_s0, img_f0)
                 w, h = min(img_f0.shape[1], img_s0.shape[1]), min(img_f0.shape[0], img_s0.shape[0])
                 img_f0 = cv2.resize(img_f0, (w, h))
                 img_s0 = cv2.resize(img_s0, (w, h))
@@ -171,10 +178,13 @@ class LoadImages:
 
     def new_video(self, path_front, path_side):
         self.frame = 0
-        self.cap_front = cv2.VideoCapture(path_front)
-        self.frames_front = max(int(self.cap_front.get(cv2.CAP_PROP_FRAME_COUNT)), 0) or float('inf')
-        self.cap_side = cv2.VideoCapture(path_side)
-        self.frames_side = max(int(self.cap_side.get(cv2.CAP_PROP_FRAME_COUNT)), 0) or float('inf')
+        try:
+            self.cap_front = cv2.VideoCapture(path_front)
+            self.frames_front = max(int(self.cap_front.get(cv2.CAP_PROP_FRAME_COUNT)), 0) or float('inf')
+            self.cap_side = cv2.VideoCapture(path_side)
+            self.frames_side = max(int(self.cap_side.get(cv2.CAP_PROP_FRAME_COUNT)), 0) or float('inf')
+        except Exception as e:
+            print("No frame", e)
         # for _ in range(30):
         #     _, _ = self.cap_front.read()
 
