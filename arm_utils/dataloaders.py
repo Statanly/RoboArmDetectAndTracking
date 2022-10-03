@@ -12,6 +12,7 @@ from PIL import ExifTags, Image
 
 import cv2
 
+#https://github.com/opencv/opencv/issues/17734
 
 # Parameters
 IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp'  # include image suffixes
@@ -19,6 +20,8 @@ VID_FORMATS = 'asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 't
 BAR_FORMAT = '{l_bar}{bar:10}{r_bar}{bar:-10b}'  # tqdm bar format
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
 
+
+print(cv2.getBuildInformation())
 def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
     # Resize and pad image while meeting stride-multiple constraints
     shape = im.shape[:2]  # current shape [height, width]
@@ -177,6 +180,7 @@ class LoadImages:
         return enhanced_img
 
     def new_video(self, path_front, path_side):
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
         self.frame = 0
         try:
             self.cap_front = cv2.VideoCapture(path_front)
@@ -185,6 +189,7 @@ class LoadImages:
             self.frames_side = max(int(self.cap_side.get(cv2.CAP_PROP_FRAME_COUNT)), 0) or float('inf')
         except Exception as e:
             print("No frame", e)
+
         # for _ in range(30):
         #     _, _ = self.cap_front.read()
 
